@@ -87,7 +87,11 @@ assert Predicated.test("trace_id != 'test123' and profile_id == '123'", %{
 
 ## TODO
 
+- [ ] Better handle non-terminal conditions when predicates are malformed
+- [ ] Add debugger that displays all the conditions and their results
+- [ ] Update docs to include example of using Ecto to store the predicates
 - [ ] Implemented nested predicates in the query parser
+- [ ] More tests
 
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
