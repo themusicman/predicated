@@ -4,13 +4,13 @@ Predicated is a library that allows for building predicates to query an in-memor
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
+If [available in Hex](https://hex.pm/packages/predicated), the package can be installed
 by adding `predicated` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:predicated, "~> 0.1.0"}
+    {:predicated, "~> 1.0"}
   ]
 end
 ```
