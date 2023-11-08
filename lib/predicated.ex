@@ -117,11 +117,11 @@ defmodule Predicated do
   @doc """
   Constructs the path used to query into the subject and extracts the expression from the subject based on that path.
 
-    iex> Predicated.path_and_value("person.first_name", %{person: %{first_name: "Bob"}})
-    {[:person, :first_name], "Bob"}
+      iex> Predicated.path_and_value("person.first_name", %{person: %{first_name: "Bob"}})
+      {[:person, :first_name], "Bob"}
 
-    iex> Predicated.path_and_value("first_name", %{first_name: "Bob"})
-    {[:first_name], "Bob"}
+      iex> Predicated.path_and_value("first_name", %{first_name: "Bob"})
+      {[:first_name], "Bob"}
     
   """
   def path_and_value(identifier, subject) do
