@@ -33,6 +33,25 @@ defmodule Predicated.QueryTest do
              } == results
     end
 
+    test "parses a query with an integer" do
+      results = Query.new("user_id == 1")
+
+      assert {
+               :ok,
+               [
+                 %Predicate{
+                   condition: %Condition{
+                     identifier: "user_id",
+                     comparison_operator: "==",
+                     expression: 1
+                   },
+                   logical_operator: nil,
+                   predicates: []
+                 }
+               ]
+             } == results
+    end
+
     test "parses a query with a multiple logical operator" do
       results = Query.new("trace_id == 'test123' and profile_id == '123' or user_id == '123'")
 
@@ -131,56 +150,92 @@ defmodule Predicated.QueryTest do
     end
 
     test "parses a query with grouped predictes and a predicate that follows a grouped predicate" do
-      results =
+      {:ok, predicates} =
         Query.new(
-          "trace_id == 'test123' AND (user_id == '123' OR user_id == '456') OR organization_id == '1'"
+          "trace_id == 'test123' AND (user_id == '123' OR user_id == '456') AND organization_id == 1 AND cart.total > 100"
         )
 
-      assert {:ok,
-              [
-                %Predicated.Predicate{
-                  condition: %Predicated.Condition{
-                    identifier: "trace_id",
-                    comparison_operator: "==",
-                    expression: "test123"
-                  },
-                  logical_operator: :and,
-                  predicates: []
-                },
-                %Predicated.Predicate{
-                  condition: nil,
-                  logical_operator: :or,
-                  predicates: [
-                    %Predicated.Predicate{
-                      condition: %Predicated.Condition{
-                        identifier: "user_id",
-                        comparison_operator: "==",
-                        expression: "123"
-                      },
-                      logical_operator: :or,
-                      predicates: []
-                    },
-                    %Predicated.Predicate{
-                      condition: %Predicated.Condition{
-                        identifier: "user_id",
-                        comparison_operator: "==",
-                        expression: "456"
-                      },
-                      logical_operator: nil,
-                      predicates: []
-                    }
-                  ]
-                },
-                %Predicated.Predicate{
-                  condition: %Predicated.Condition{
-                    identifier: "organization_id",
-                    comparison_operator: "==",
-                    expression: "1"
-                  },
-                  logical_operator: nil,
-                  predicates: []
-                }
-              ]} == results
+      assert [
+               %Predicated.Predicate{
+                 condition: %Predicated.Condition{
+                   identifier: "trace_id",
+                   comparison_operator: "==",
+                   expression: "test123"
+                 },
+                 logical_operator: :and,
+                 predicates: []
+               },
+               %Predicated.Predicate{
+                 condition: nil,
+                 logical_operator: :and,
+                 predicates: [
+                   %Predicated.Predicate{
+                     condition: %Predicated.Condition{
+                       identifier: "user_id",
+                       comparison_operator: "==",
+                       expression: "123"
+                     },
+                     logical_operator: :or,
+                     predicates: []
+                   },
+                   %Predicated.Predicate{
+                     condition: %Predicated.Condition{
+                       identifier: "user_id",
+                       comparison_operator: "==",
+                       expression: "456"
+                     },
+                     logical_operator: nil,
+                     predicates: []
+                   }
+                 ]
+               },
+               %Predicated.Predicate{
+                 condition: %Predicated.Condition{
+                   identifier: "organization_id",
+                   comparison_operator: "==",
+                   expression: 1
+                 },
+                 logical_operator: :and,
+                 predicates: []
+               },
+               %Predicate{
+                 condition: %Condition{
+                   identifier: "cart.total",
+                   comparison_operator: ">",
+                   expression: 100
+                 },
+                 logical_operator: nil,
+                 predicates: []
+               }
+             ] == predicates
+
+      assert Predicated.test(predicates, %{
+               trace_id: "test123",
+               user_id: "123",
+               organization_id: 1,
+               cart: %{total: 101}
+             })
+
+      assert Predicated.test(predicates, %{
+               trace_id: "test123",
+               user_id: "456",
+               organization_id: 1,
+               cart: %{total: 101}
+             })
+
+      refute Predicated.test(predicates, %{
+               trace_id: "test123",
+               user_id: "444",
+               organization_id: 1,
+               cart: %{total: 101}
+             })
+
+      refute Predicated.test(predicates, %{
+               trace_id: "test456",
+               user_id: "123",
+               organization_id: 1,
+               cart: %{total: 101}
+             })
     end
 
     test "parses a query with nested grouped predictes" do

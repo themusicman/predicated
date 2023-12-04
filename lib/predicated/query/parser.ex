@@ -11,17 +11,35 @@ defmodule Predicated.Query.Parser do
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:identifier)
 
-  expression =
+  string_expression =
     ignore(whitespace)
     |> ignore(string("'"))
     |> utf8_string([?a..?z, ?A..?Z, ?0..?9, ?_, ?=, ?>, ?<, ?\s, ?-, ?:], min: 1)
     |> ignore(string("'"))
     |> reduce({Enum, :join, [""]})
-    |> unwrap_and_tag(:expression)
+    |> unwrap_and_tag(:string_expression)
+
+  number_expression =
+    ignore(whitespace)
+    |> integer(min: 1)
+    |> reduce({Enum, :join, [""]})
+    |> unwrap_and_tag(:number_expression)
+
+  expression =
+    choice([string_expression, number_expression])
 
   comparison_operator =
     ignore(whitespace)
-    |> choice([string("=="), string("!=")])
+    |> choice([
+      string("=="),
+      string("!="),
+      string(">"),
+      string("<"),
+      string("=>"),
+      string("<="),
+      string("IN"),
+      string("in")
+    ])
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:comparison_operator)
 

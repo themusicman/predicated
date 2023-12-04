@@ -68,7 +68,7 @@ defmodule Predicated.Query do
             condition: %Condition{
               identifier: Keyword.get(result, :identifier),
               comparison_operator: Keyword.get(result, :comparison_operator),
-              expression: Keyword.get(result, :expression)
+              expression: get_expression(result)
             },
             logical_operator: get_logical_operator(result)
           }
@@ -77,6 +77,33 @@ defmodule Predicated.Query do
       end
 
     compile_results(results, acc)
+  end
+
+  # TODO refactor
+  # Handle other types - dates, lists, etc
+  # https://github.com/taxjar/date_time_parser
+  def get_expression(result) do
+    string = Keyword.get(result, :string_expression)
+    number = Keyword.get(result, :number_expression)
+
+    case {string, number} do
+      {nil, number} -> parse_number(number)
+      {string, nil} -> string
+    end
+  end
+
+  def parse_number(string) do
+    if String.contains?(string, ".") do
+      case Float.parse(string) do
+        {number, _remainder} -> number
+        _ -> nil
+      end
+    else
+      case Integer.parse(string) do
+        {number, _remainder} -> number
+        _ -> nil
+      end
+    end
   end
 
   def get_logical_operator([_, _, _, logical_operator]) when is_binary(logical_operator) do
