@@ -1,5 +1,7 @@
 # Predicated
 
+[![Elixir CI](https://github.com/themusicman/predicated/actions/workflows/elixir.yml/badge.svg)](https://github.com/themusicman/predicated/actions/workflows/elixir.yml)
+
 Predicated is a library that allows for building predicates to query an in-memory data structure in Elixir.
 
 ## Installation
