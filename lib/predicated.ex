@@ -81,22 +81,22 @@ defmodule Predicated do
 
   def eval(%{identifier: identifier, comparison_operator: ">", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    expression > subject_value
+    subject_value > expression
   end
 
   def eval(%{identifier: identifier, comparison_operator: ">=", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    expression >= subject_value
+    subject_value >= expression
   end
 
   def eval(%{identifier: identifier, comparison_operator: "<", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    expression < subject_value
+    subject_value < expression
   end
 
   def eval(%{identifier: identifier, comparison_operator: "<=", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    expression <= subject_value
+    subject_value <= expression
   end
 
   def eval(

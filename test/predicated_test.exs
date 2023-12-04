@@ -46,14 +46,14 @@ defmodule PredicatedTest do
       assert Predicated.eval(
                %Condition{identifier: "age", comparison_operator: ">", expression: 12},
                %{
-                 age: 2
+                 age: 13
                }
              ) == true
     end
 
     test "identifier > expression returns false" do
       assert Predicated.eval(
-               %Condition{identifier: "age", comparison_operator: ">", expression: 1},
+               %Condition{identifier: "age", comparison_operator: ">", expression: 3},
                %{
                  age: 2
                }
@@ -73,14 +73,14 @@ defmodule PredicatedTest do
       assert Predicated.eval(
                %Condition{identifier: "age", comparison_operator: ">=", expression: 12},
                %{
-                 age: 2
+                 age: 13
                }
              ) == true
     end
 
     test "identifier >= expression returns false" do
       assert Predicated.eval(
-               %Condition{identifier: "age", comparison_operator: ">=", expression: 1},
+               %Condition{identifier: "age", comparison_operator: ">=", expression: 3},
                %{
                  age: 2
                }
@@ -89,7 +89,7 @@ defmodule PredicatedTest do
 
     test "identifier < expression returns true" do
       assert Predicated.eval(
-               %Condition{identifier: "age", comparison_operator: "<", expression: 1},
+               %Condition{identifier: "age", comparison_operator: "<", expression: 3},
                %{
                  age: 2
                }
@@ -100,7 +100,7 @@ defmodule PredicatedTest do
       assert Predicated.eval(
                %Condition{identifier: "age", comparison_operator: "<", expression: 12},
                %{
-                 age: 2
+                 age: 13
                }
              ) == false
     end
@@ -116,7 +116,7 @@ defmodule PredicatedTest do
 
     test "identifier <= expression returns true" do
       assert Predicated.eval(
-               %Condition{identifier: "age", comparison_operator: "<=", expression: 1},
+               %Condition{identifier: "age", comparison_operator: "<=", expression: 3},
                %{
                  age: 2
                }
@@ -127,7 +127,7 @@ defmodule PredicatedTest do
       assert Predicated.eval(
                %Condition{identifier: "age", comparison_operator: "<=", expression: 12},
                %{
-                 age: 2
+                 age: 13
                }
              ) == false
     end
