@@ -67,21 +67,5 @@ defmodule Predicated.Query.Parser do
     ])
   )
 
-  # operator =
-  #   ignore(optional(whitespace))
-  #   |> optional(choice([string("AND"), string("and"), string("OR"), string("or")]))
-  #   |> reduce({Enum, :join, [""]})
-  #   |> unwrap_and_tag(:logical_operator)
-
-  # predicate =
-  #   ignore(optional(whitespace))
-  #   |> concat(indentifier)
-  #   |> concat(comparison_operator)
-  #   |> concat(expression)
-  #   |> concat(operator)
-
   defparsec(:parse, parsec(:expr), export_metadata: true)
-  # query = repeat(predicate) |> eos()
-  #
-  # defparsec(:parse, query)
 end
