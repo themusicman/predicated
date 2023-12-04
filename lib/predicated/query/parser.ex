@@ -21,7 +21,8 @@ defmodule Predicated.Query.Parser do
 
   number_expression =
     ignore(whitespace)
-    |> integer(min: 1)
+    |> optional(string("-"))
+    |> choice([utf8_string([?0..?9, ?.], min: 1), integer(min: 1)])
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:number_expression)
 
@@ -48,6 +49,7 @@ defmodule Predicated.Query.Parser do
     |> concat(indentifier)
     |> concat(comparison_operator)
     |> concat(expression)
+    |> ignore(optional(whitespace))
 
   grouping =
     empty()

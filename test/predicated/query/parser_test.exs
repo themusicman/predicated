@@ -52,6 +52,53 @@ defmodule Predicated.QueryTest do
              } == results
     end
 
+    test "parses a query with a float" do
+      results = Query.new("cart.total > 100.50 AND cart.total < 1000")
+
+      assert {
+               :ok,
+               [
+                 %Predicate{
+                   condition: %Condition{
+                     identifier: "cart.total",
+                     comparison_operator: ">",
+                     expression: 100.50
+                   },
+                   logical_operator: :and,
+                   predicates: []
+                 },
+                 %Predicate{
+                   condition: %Condition{
+                     identifier: "cart.total",
+                     comparison_operator: "<",
+                     expression: 1000
+                   },
+                   logical_operator: nil,
+                   predicates: []
+                 }
+               ]
+             } == results
+    end
+
+    test "parses a query with a negative float" do
+      results = Query.new("cart.total > -100.50")
+
+      assert {
+               :ok,
+               [
+                 %Predicate{
+                   condition: %Condition{
+                     identifier: "cart.total",
+                     comparison_operator: ">",
+                     expression: -100.50
+                   },
+                   logical_operator: nil,
+                   predicates: []
+                 }
+               ]
+             } == results
+    end
+
     test "parses a query with a multiple logical operator" do
       results = Query.new("trace_id == 'test123' and profile_id == '123' or user_id == '123'")
 
