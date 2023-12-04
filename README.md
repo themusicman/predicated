@@ -87,7 +87,7 @@ assert Predicated.test("trace_id != 'test123' and profile_id == '123'", %{
 
 ## TODO
 
-- [x] Implemented nested predicates in the query parser
+- [x] Implement grouped/nested predicates in the query parser
 - [ ] Add a to_sql function that turns the predicate data structure into where clauses in an ecto query
 - [ ] Better handle non-terminal conditions when predicates are malformed
 - [ ] Add debugger that displays all the conditions and their results
