@@ -12,7 +12,7 @@ by adding `predicated` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:predicated, "~> 1.0"}
+    {:predicated, "~> 1.1"}
   ]
 end
 ```
@@ -151,7 +151,6 @@ assert Predicated.test("inserted_at >= '2020-01-01T01:50:07Z'::DATETIME", %{
 ## TODO
 
 - [x] Implement grouped/nested predicates in the query parser
-- [ ] Add a to_sql function that turns the predicate data structure into where clauses in an ecto query
 - [ ] Better handle non-terminal conditions when predicates are malformed
 - [ ] Add debugger that displays all the conditions and their results
 - [ ] Update docs to include example of using Ecto to store the predicates
