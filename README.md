@@ -133,6 +133,20 @@ assert Predicated.test("verified == TRUE AND post.count > 100", %{
 
 ```
 
+Support for dates and datetimes:
+
+```elixir
+assert Predicated.test("dob >= '2020-01-01'::DATE", %{
+  dob: ~D[2023-02-11]
+}) == true
+```
+
+```elixir
+assert Predicated.test("inserted_at >= '2020-01-01T01:50:07Z'::DATETIME", %{
+  inserted_at: ~U[2020-01-01 10:00:00Z] 
+}) == true
+```
+
 
 ## TODO
 
