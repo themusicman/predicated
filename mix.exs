@@ -2,7 +2,7 @@ defmodule Predicated.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/themusicman/predicated"
-  @version "1.0.0"
+  @version "1.1.0"
 
   def project do
     [
