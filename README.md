@@ -19,7 +19,7 @@ end
 
 ## Examples
 
-Using Structs
+Using Structs.
 
 ```elixir
 predicates = [
@@ -74,6 +74,32 @@ predicates = [
 
 # true && (true || (false && true)) && false
 assert Predicated.test(predicates, %{first_name: "Joe", last_name: "Armstrong"}) == false
+```
+
+The example above could also be written with just plain maps or embedded schema as long as the data shape is the same. 
+
+For example
+
+```elixir
+%Predicate{
+  condition: %Condition{
+    identifier: "last_name",
+    comparison_operator: "==",
+    expression: "Beaver"
+  }
+}
+```
+
+converted to a map would be
+
+```elixir
+%{
+  condition: %{
+    identifier: "last_name",
+    comparison_operator: "==",
+    expression: "Beaver"
+  }
+}
 ```
 
 Using a query string:
