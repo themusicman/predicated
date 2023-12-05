@@ -1,6 +1,7 @@
 defmodule Predicated do
   require Logger
   alias Predicated.Query
+  alias Predicated.Predicate
 
   def test(predicates, subject, acc \\ [])
 
@@ -195,4 +196,12 @@ defmodule Predicated do
   def datetime?(%DateTime{} = _datetime), do: true
   def datetime?(%NaiveDateTime{} = _datetime), do: true
   def datetime?(_), do: false
+
+  def to_query(predicates) do
+    Enum.reduce(predicates, [], fn predicate, acc ->
+      [Predicate.to_query(predicate), acc]
+    end)
+    |> Enum.reverse()
+    |> Enum.join(" ")
+  end
 end

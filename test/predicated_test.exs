@@ -685,4 +685,62 @@ defmodule PredicatedTest do
       refute result
     end
   end
+
+  describe "to_query/1" do
+    test "retuns query string for predicates" do
+      predicates = [
+        %Predicated.Predicate{
+          condition: %Predicated.Condition{
+            identifier: "trace_id",
+            comparison_operator: "==",
+            expression: "test123"
+          },
+          logical_operator: :and,
+          predicates: []
+        },
+        %Predicated.Predicate{
+          condition: nil,
+          logical_operator: nil,
+          predicates: [
+            %Predicated.Predicate{
+              condition: %Predicated.Condition{
+                identifier: "organization_id",
+                comparison_operator: "==",
+                expression: "1"
+              },
+              logical_operator: :or,
+              predicates: []
+            },
+            %Predicated.Predicate{
+              condition: nil,
+              logical_operator: nil,
+              predicates: [
+                %Predicated.Predicate{
+                  condition: %Predicated.Condition{
+                    identifier: "user_id",
+                    comparison_operator: "==",
+                    expression: "123"
+                  },
+                  logical_operator: :or,
+                  predicates: []
+                },
+                %Predicated.Predicate{
+                  condition: %Predicated.Condition{
+                    identifier: "user_id",
+                    comparison_operator: "==",
+                    expression: "456"
+                  },
+                  logical_operator: nil,
+                  predicates: []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+
+      assert Predicated.to_query(predicates) ==
+               "trace_id == 'test123' AND (organization_id == '1' OR (user_id == '123' OR user_id == '456'))"
+    end
+  end
 end
