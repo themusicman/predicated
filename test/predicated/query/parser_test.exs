@@ -33,6 +33,25 @@ defmodule Predicated.QueryTest do
              } == results
     end
 
+    test "parses a query with a string that contains a period" do
+      results = Query.new("name == 'user.created'")
+
+      assert {
+               :ok,
+               [
+                 %Predicate{
+                   condition: %Condition{
+                     identifier: "name",
+                     comparison_operator: "==",
+                     expression: "user.created"
+                   },
+                   logical_operator: nil,
+                   predicates: []
+                 }
+               ]
+             } == results
+    end
+
     test "parses a query with an integer" do
       results = Query.new("user_id == 1")
 
