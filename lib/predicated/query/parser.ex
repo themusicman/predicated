@@ -22,11 +22,17 @@ defmodule Predicated.Query.Parser do
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:boolean_expression)
 
+  cast =
+    empty()
+    |> string("::")
+    |> utf8_string([?a..?z, ?A..?Z], min: 1)
+
   string_expression =
     ignore(whitespace)
     |> ignore(string("'"))
     |> utf8_string([?a..?z, ?A..?Z, ?0..?9, ?_, ?=, ?>, ?<, ?\s, ?-, ?:], min: 1)
     |> ignore(string("'"))
+    |> optional(cast)
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:string_expression)
 

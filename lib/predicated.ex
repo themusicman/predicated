@@ -71,32 +71,92 @@ defmodule Predicated do
   """
   def eval(%{identifier: identifier, comparison_operator: "==", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    subject_value == expression
+
+    cond do
+      date?(expression) ->
+        Date.compare(subject_value, expression) == :eq
+
+      datetime?(expression) ->
+        DateTime.compare(subject_value, expression) == :eq
+
+      true ->
+        subject_value == expression
+    end
   end
 
   def eval(%{identifier: identifier, comparison_operator: "!=", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    subject_value != expression
+
+    cond do
+      date?(expression) ->
+        Date.compare(subject_value, expression) != :eq
+
+      datetime?(expression) ->
+        DateTime.compare(subject_value, expression) != :eq
+
+      true ->
+        subject_value != expression
+    end
   end
 
   def eval(%{identifier: identifier, comparison_operator: ">", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    subject_value > expression
+
+    cond do
+      date?(expression) ->
+        Date.compare(subject_value, expression) == :gt
+
+      datetime?(expression) ->
+        DateTime.compare(subject_value, expression) == :gt
+
+      true ->
+        subject_value > expression
+    end
   end
 
   def eval(%{identifier: identifier, comparison_operator: ">=", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    subject_value >= expression
+
+    cond do
+      date?(expression) ->
+        Date.compare(subject_value, expression) in [:eq, :gt]
+
+      datetime?(expression) ->
+        DateTime.compare(subject_value, expression) in [:eq, :gt]
+
+      true ->
+        subject_value >= expression
+    end
   end
 
   def eval(%{identifier: identifier, comparison_operator: "<", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    subject_value < expression
+
+    cond do
+      date?(expression) ->
+        Date.compare(subject_value, expression) == :lt
+
+      datetime?(expression) ->
+        DateTime.compare(subject_value, expression) == :lt
+
+      true ->
+        subject_value < expression
+    end
   end
 
   def eval(%{identifier: identifier, comparison_operator: "<=", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    subject_value <= expression
+
+    cond do
+      date?(expression) ->
+        Date.compare(subject_value, expression) in [:eq, :lt]
+
+      datetime?(expression) ->
+        DateTime.compare(subject_value, expression) in [:eq, :lt]
+
+      true ->
+        subject_value <= expression
+    end
   end
 
   def eval(
@@ -128,4 +188,11 @@ defmodule Predicated do
     path = String.split(identifier, ".") |> Enum.map(&String.to_atom/1)
     {path, get_in(subject, path)}
   end
+
+  def date?(%Date{} = _date), do: true
+  def date?(_), do: false
+
+  def datetime?(%DateTime{} = _datetime), do: true
+  def datetime?(%NaiveDateTime{} = _datetime), do: true
+  def datetime?(_), do: false
 end

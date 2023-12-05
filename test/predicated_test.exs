@@ -131,6 +131,188 @@ defmodule PredicatedTest do
                }
              ) == false
     end
+
+    test "identifier == date expression returns true" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: "==",
+                 expression: ~D[2020-01-01]
+               },
+               %{
+                 dob: ~D[2020-01-01]
+               }
+             ) == true
+    end
+
+    test "identifier == date expression returns false" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: "==",
+                 expression: ~D[2020-01-01]
+               },
+               %{
+                 dob: ~D[2020-01-03]
+               }
+             ) == false
+    end
+
+    test "identifier != date expression returns true" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: "!=",
+                 expression: ~D[2020-01-01]
+               },
+               %{
+                 dob: ~D[2020-01-03]
+               }
+             ) == true
+    end
+
+    test "identifier != date expression returns false" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: "!=",
+                 expression: ~D[2020-01-01]
+               },
+               %{
+                 dob: ~D[2020-01-01]
+               }
+             ) == false
+    end
+
+    test "identifier > date expression returns true" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: ">",
+                 expression: ~D[2020-01-01]
+               },
+               %{
+                 dob: ~D[2020-01-02]
+               }
+             ) == true
+    end
+
+    test "identifier > date expression returns false" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: ">",
+                 expression: ~D[2020-01-07]
+               },
+               %{
+                 dob: ~D[2020-01-02]
+               }
+             ) == false
+    end
+
+    test "identifier >= date expression when values are equal returns true" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: ">=",
+                 expression: ~D[2020-01-02]
+               },
+               %{
+                 dob: ~D[2020-01-02]
+               }
+             ) == true
+    end
+
+    test "identifier >= date expression returns true" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: ">=",
+                 expression: ~D[2020-01-02]
+               },
+               %{
+                 dob: ~D[2020-01-03]
+               }
+             ) == true
+    end
+
+    test "identifier >= date expression returns false" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: ">=",
+                 expression: ~D[2020-01-02]
+               },
+               %{
+                 dob: ~D[2019-01-02]
+               }
+             ) == false
+    end
+
+    test "identifier < date expression returns true" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: "<",
+                 expression: ~D[2020-01-02]
+               },
+               %{
+                 dob: ~D[2019-01-01]
+               }
+             ) == true
+    end
+
+    test "identifier < date expression returns false" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: "<",
+                 expression: ~D[2020-01-02]
+               },
+               %{
+                 dob: ~D[2023-01-01]
+               }
+             ) == false
+    end
+
+    test "identifier <= date expression when values are equal returns true" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: "<=",
+                 expression: ~D[2020-01-02]
+               },
+               %{
+                 dob: ~D[2020-01-02]
+               }
+             ) == true
+    end
+
+    test "identifier <= date expression returns true" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: "<=",
+                 expression: ~D[2020-01-02]
+               },
+               %{
+                 dob: ~D[2019-01-02]
+               }
+             ) == true
+    end
+
+    test "identifier <= date expression returns false" do
+      assert Predicated.eval(
+               %Condition{
+                 identifier: "dob",
+                 comparison_operator: "<=",
+                 expression: ~D[2020-01-02]
+               },
+               %{
+                 dob: ~D[2023-01-02]
+               }
+             ) == false
+    end
   end
 
   describe "test/3" do

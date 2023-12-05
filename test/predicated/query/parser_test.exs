@@ -52,6 +52,47 @@ defmodule Predicated.QueryTest do
              } == results
     end
 
+    test "parses a query with a value cast as a datetime" do
+      results = Query.new("inserted_at > '2015-01-23T23:50:07Z'::DATETIME")
+
+      {:ok, datetime, _offset} = DateTime.from_iso8601("2015-01-23T23:50:07Z")
+
+      assert {
+               :ok,
+               [
+                 %Predicate{
+                   condition: %Condition{
+                     identifier: "inserted_at",
+                     comparison_operator: ">",
+                     expression: datetime
+                   },
+                   logical_operator: nil,
+                   predicates: []
+                 }
+               ]
+             } == results
+    end
+
+    test "parses a query with a value cast as a date" do
+      {:ok, predicates} = Query.new("dob > '2015-01-23'::DATE")
+
+      {:ok, date} = Date.from_iso8601("2015-01-23")
+
+      assert [
+               %Predicate{
+                 condition: %Condition{
+                   identifier: "dob",
+                   comparison_operator: ">",
+                   expression: date
+                 },
+                 logical_operator: nil,
+                 predicates: []
+               }
+             ] == predicates
+
+      assert Predicated.test(predicates, %{dob: ~D[2016-01-01]})
+    end
+
     test "parses a query with a boolean" do
       {:ok, predicates} = Query.new("verified == true")
 

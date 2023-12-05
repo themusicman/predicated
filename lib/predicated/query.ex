@@ -81,16 +81,49 @@ defmodule Predicated.Query do
 
   # TODO refactor
   # Handle other types - dates, lists, etc
-  # https://github.com/taxjar/date_time_parser
   def get_expression(result) do
     string = Keyword.get(result, :string_expression)
     number = Keyword.get(result, :number_expression)
     boolean = Keyword.get(result, :boolean_expression)
 
-    case {string, number, boolean} do
-      {nil, number, nil} -> cast_number(number)
-      {string, nil, nil} -> string
-      {nil, nil, boolean} -> cast_boolean(boolean)
+    {date, datetime} =
+      cond do
+        datetime?(string) ->
+          {nil, String.split(string, "::") |> List.first()}
+
+        date?(string) ->
+          {String.split(string, "::") |> List.first(), nil}
+
+        true ->
+          {nil, nil}
+      end
+
+    case {string, number, boolean, datetime, date} do
+      {_, nil, nil, _, date} when is_binary(date) -> cast_date(date)
+      {_, nil, nil, datetime, _} when is_binary(datetime) -> cast_datetime(datetime)
+      {nil, number, nil, nil, nil} -> cast_number(number)
+      {string, nil, nil, nil, nil} -> string
+      {nil, nil, boolean, nil, nil} -> cast_boolean(boolean)
+    end
+  end
+
+  def date?(string) when is_binary(string), do: String.contains?(string, "::DATE")
+  def date?(_), do: false
+
+  def datetime?(string) when is_binary(string), do: String.contains?(string, "::DATETIME")
+  def datetime?(_), do: false
+
+  def cast_date(string) do
+    case Date.from_iso8601(string) do
+      {:ok, date} -> date
+      _ -> nil
+    end
+  end
+
+  def cast_datetime(string) do
+    case DateTime.from_iso8601(string) do
+      {:ok, datetime, _} -> datetime
+      _ -> nil
     end
   end
 
