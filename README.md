@@ -76,13 +76,34 @@ predicates = [
 assert Predicated.test(predicates, %{first_name: "Joe", last_name: "Armstrong"}) == false
 ```
 
-Using a query string
+Using a query string:
 
 ```elixir
 assert Predicated.test("trace_id != 'test123' and profile_id == '123'", %{
   trace_id: "test123",
   profile_id: "123"
 }) == false
+
+```
+
+Support for grouped and nested predicates:
+
+```elixir
+assert Predicated.test("organization_id == '123' AND (user_id == '123' OR user_id == '456' OR (user_type == 'admin' OR user_type == 'editor'))", %{
+  organization_id: "123",
+  user_id: "767",
+  user_type: "admin"
+}) == true
+
+```
+
+Support for boolean and integers:
+
+```elixir
+assert Predicated.test("verified == TRUE AND post.count > 100", %{
+  verified: true,
+  post: %{ count: 123 }
+}) == true
 
 ```
 
