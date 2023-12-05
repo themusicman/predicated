@@ -11,6 +11,17 @@ defmodule Predicated.Query.Parser do
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:identifier)
 
+  boolean_expression =
+    ignore(whitespace)
+    |> choice([
+      string("true"),
+      string("TRUE"),
+      string("false"),
+      string("FALSE")
+    ])
+    |> reduce({Enum, :join, [""]})
+    |> unwrap_and_tag(:boolean_expression)
+
   string_expression =
     ignore(whitespace)
     |> ignore(string("'"))
@@ -27,7 +38,7 @@ defmodule Predicated.Query.Parser do
     |> unwrap_and_tag(:number_expression)
 
   expression =
-    choice([string_expression, number_expression])
+    choice([boolean_expression, string_expression, number_expression])
 
   comparison_operator =
     ignore(whitespace)
@@ -38,8 +49,10 @@ defmodule Predicated.Query.Parser do
       string("<"),
       string("=>"),
       string("<="),
-      string("IN"),
-      string("in")
+      # string("IN"),
+      # string("in")
+      string("CONTAINS"),
+      string("contains")
     ])
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:comparison_operator)

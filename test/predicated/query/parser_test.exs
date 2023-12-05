@@ -52,6 +52,44 @@ defmodule Predicated.QueryTest do
              } == results
     end
 
+    test "parses a query with a boolean" do
+      {:ok, predicates} = Query.new("verified == true")
+
+      assert [
+               %Predicate{
+                 condition: %Condition{
+                   identifier: "verified",
+                   comparison_operator: "==",
+                   expression: true
+                 },
+                 logical_operator: nil,
+                 predicates: []
+               }
+             ] == predicates
+
+      assert Predicated.test(predicates, %{
+               verified: true
+             })
+
+      {:ok, predicates} = Query.new("verified == false")
+
+      assert [
+               %Predicate{
+                 condition: %Condition{
+                   identifier: "verified",
+                   comparison_operator: "==",
+                   expression: false
+                 },
+                 logical_operator: nil,
+                 predicates: []
+               }
+             ] == predicates
+
+      assert Predicated.test(predicates, %{
+               verified: false
+             })
+    end
+
     test "parses a query with a float" do
       results = Query.new("cart.total > 100.50 AND cart.total < 1000")
 
@@ -286,62 +324,79 @@ defmodule Predicated.QueryTest do
     end
 
     test "parses a query with nested grouped predictes" do
-      results =
+      {:ok, predicates} =
         Query.new(
           "trace_id == 'test123' AND ( organization_id == '1' OR (user_id == '123' OR user_id == '456'))"
         )
 
-      assert {:ok,
-              [
-                %Predicated.Predicate{
-                  condition: %Predicated.Condition{
-                    identifier: "trace_id",
-                    comparison_operator: "==",
-                    expression: "test123"
-                  },
-                  logical_operator: :and,
-                  predicates: []
-                },
-                %Predicated.Predicate{
-                  condition: nil,
-                  logical_operator: nil,
-                  predicates: [
-                    %Predicated.Predicate{
-                      condition: %Predicated.Condition{
-                        identifier: "organization_id",
-                        comparison_operator: "==",
-                        expression: "1"
-                      },
-                      logical_operator: :or,
-                      predicates: []
-                    },
-                    %Predicated.Predicate{
-                      condition: nil,
-                      logical_operator: nil,
-                      predicates: [
-                        %Predicated.Predicate{
-                          condition: %Predicated.Condition{
-                            identifier: "user_id",
-                            comparison_operator: "==",
-                            expression: "123"
-                          },
-                          logical_operator: :or,
-                          predicates: []
-                        },
-                        %Predicated.Predicate{
-                          condition: %Predicated.Condition{
-                            identifier: "user_id",
-                            comparison_operator: "==",
-                            expression: "456"
-                          },
-                          logical_operator: nil,
-                          predicates: []
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]} == results
+      assert [
+               %Predicated.Predicate{
+                 condition: %Predicated.Condition{
+                   identifier: "trace_id",
+                   comparison_operator: "==",
+                   expression: "test123"
+                 },
+                 logical_operator: :and,
+                 predicates: []
+               },
+               %Predicated.Predicate{
+                 condition: nil,
+                 logical_operator: nil,
+                 predicates: [
+                   %Predicated.Predicate{
+                     condition: %Predicated.Condition{
+                       identifier: "organization_id",
+                       comparison_operator: "==",
+                       expression: "1"
+                     },
+                     logical_operator: :or,
+                     predicates: []
+                   },
+                   %Predicated.Predicate{
+                     condition: nil,
+                     logical_operator: nil,
+                     predicates: [
+                       %Predicated.Predicate{
+                         condition: %Predicated.Condition{
+                           identifier: "user_id",
+                           comparison_operator: "==",
+                           expression: "123"
+                         },
+                         logical_operator: :or,
+                         predicates: []
+                       },
+                       %Predicated.Predicate{
+                         condition: %Predicated.Condition{
+                           identifier: "user_id",
+                           comparison_operator: "==",
+                           expression: "456"
+                         },
+                         logical_operator: nil,
+                         predicates: []
+                       }
+                     ]
+                   }
+                 ]
+               }
+             ] == predicates
+
+      assert Predicated.test(predicates, %{
+               trace_id: "test123",
+               user_id: "555",
+               organization_id: "1"
+             })
+
+      assert Predicated.test(predicates, %{
+               trace_id: "test123",
+               user_id: "123",
+               organization_id: "5"
+             })
+
+      assert Predicated.test(predicates, %{
+               trace_id: "test123",
+               user_id: "456",
+               organization_id: "5"
+             })
     end
 
     test "handles an empty string" do

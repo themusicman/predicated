@@ -85,14 +85,21 @@ defmodule Predicated.Query do
   def get_expression(result) do
     string = Keyword.get(result, :string_expression)
     number = Keyword.get(result, :number_expression)
+    boolean = Keyword.get(result, :boolean_expression)
 
-    case {string, number} do
-      {nil, number} -> parse_number(number)
-      {string, nil} -> string
+    case {string, number, boolean} do
+      {nil, number, nil} -> cast_number(number)
+      {string, nil, nil} -> string
+      {nil, nil, boolean} -> cast_boolean(boolean)
     end
   end
 
-  def parse_number(string) do
+  def cast_boolean("TRUE"), do: true
+  def cast_boolean("true"), do: true
+  def cast_boolean("FALSE"), do: false
+  def cast_boolean("false"), do: false
+
+  def cast_number(string) do
     if String.contains?(string, ".") do
       case Float.parse(string) do
         {number, _remainder} -> number
