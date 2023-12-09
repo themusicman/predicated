@@ -6,6 +6,24 @@ defmodule PredicatedTest do
   alias Predicated.Condition
 
   describe "eval/2" do
+    test "identifier in expression returns true" do
+      assert Predicated.eval(
+               %Condition{identifier: "name", comparison_operator: "in", expression: ["Bob"]},
+               %{
+                 name: "Bob"
+               }
+             ) == true
+    end
+
+    test "identifier in= expression returns false" do
+      assert Predicated.eval(
+               %Condition{identifier: "name", comparison_operator: "in", expression: ["Bill"]},
+               %{
+                 name: "Bob"
+               }
+             ) == false
+    end
+
     test "identifier == expression returns true" do
       assert Predicated.eval(
                %Condition{identifier: "name", comparison_operator: "==", expression: "Bob"},

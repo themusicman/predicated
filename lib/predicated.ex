@@ -168,6 +168,14 @@ defmodule Predicated do
     expression in subject_value
   end
 
+  def eval(
+        %{identifier: identifier, comparison_operator: "in", expression: expression},
+        subject
+      ) do
+    {_path, subject_value} = path_and_value(identifier, subject)
+    subject_value in expression
+  end
+
   # TODO add other operators like like, contains, in, starts_with etc
 
   # fallback case if no other conditions match 
