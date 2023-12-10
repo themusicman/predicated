@@ -38,6 +38,31 @@ defmodule Predicated.QueryTest do
              } == results
     end
 
+    test "parses a query with an in comparison_operator that has uuids" do
+      results =
+        Query.new(
+          "trace_id in ['580fa97a-8c54-4174-90ab-2f7ce0e71e61', 'e811ba6a-c304-4ac8-87d7-5bc0e3bf5d95']"
+        )
+
+      assert {
+               :ok,
+               [
+                 %Predicate{
+                   condition: %Condition{
+                     identifier: "trace_id",
+                     comparison_operator: "in",
+                     expression: [
+                       "580fa97a-8c54-4174-90ab-2f7ce0e71e61",
+                       "e811ba6a-c304-4ac8-87d7-5bc0e3bf5d95"
+                     ]
+                   },
+                   logical_operator: nil,
+                   predicates: []
+                 }
+               ]
+             } == results
+    end
+
     test "parses a query with a logical operator" do
       results = Query.new("trace_id == 'test123' and profile_id == '123'")
 

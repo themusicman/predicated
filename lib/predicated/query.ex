@@ -127,8 +127,8 @@ defmodule Predicated.Query do
                   v = "#{date}#{cast_as}"
                   cast(v)
 
-                [value] ->
-                  cast(value)
+                [v] ->
+                  cast(v)
               end
 
             _ ->
@@ -188,17 +188,26 @@ defmodule Predicated.Query do
   def cast_boolean("false"), do: {:ok, false}
   def cast_boolean(value), do: value
 
+  def number?(value) when is_binary(value), do: !String.match?(value, ~r/[a-zA-Z]+/)
+  def number?(value) when is_integer(value), do: true
+  def number?(value) when is_float(value), do: true
+  def number?(_), do: false
+
   def cast_number(value) when is_binary(value) do
-    if String.contains?(value, ".") do
-      case Float.parse(value) do
-        {number, _remainder} -> {:ok, number}
-        _ -> value
+    if number?(value) do
+      if String.contains?(value, ".") do
+        case Float.parse(value) do
+          {number, _remainder} -> {:ok, number}
+          _ -> value
+        end
+      else
+        case Integer.parse(value) do
+          {number, _remainder} -> {:ok, number}
+          _ -> value
+        end
       end
     else
-      case Integer.parse(value) do
-        {number, _remainder} -> {:ok, number}
-        _ -> value
-      end
+      value
     end
   end
 
