@@ -14,6 +14,9 @@ defmodule Predicated.Query do
 
         {:ok, results}
 
+      {:ok, _results, rest, _, _, _} ->
+        {:error, unparsed: rest}
+
       {:error, reason, _rest, _, _, _} ->
         {:error, reason}
     end

@@ -5,6 +5,13 @@ defmodule Predicated.QueryTest do
   alias Predicated.Query
 
   describe "new/1" do
+    test "returns parse_error_at if there is a syntax error" do
+      results =
+        Query.new("trace_id == '123' and organization_id==1")
+
+      assert {:error, [unparsed: "and organization_id==1"]} == results
+    end
+
     test "parses a query with an in comparison_operator" do
       {:ok, datetime, _offset} = DateTime.from_iso8601("2015-01-23T23:50:07Z")
 
