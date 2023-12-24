@@ -262,6 +262,44 @@ defmodule Predicated.QueryTest do
              } == results
     end
 
+    test "parses a query with a greater than or equal to logical operator" do
+      results = Query.new("cart.total >= 100")
+
+      assert {
+               :ok,
+               [
+                 %Predicate{
+                   condition: %Condition{
+                     identifier: "cart.total",
+                     comparison_operator: ">=",
+                     expression: 100
+                   },
+                   logical_operator: nil,
+                   predicates: []
+                 }
+               ]
+             } == results
+    end
+
+    test "parses a query with a less than or equal to logical operator" do
+      results = Query.new("cart.total <= 100")
+
+      assert {
+               :ok,
+               [
+                 %Predicate{
+                   condition: %Condition{
+                     identifier: "cart.total",
+                     comparison_operator: "<=",
+                     expression: 100
+                   },
+                   logical_operator: nil,
+                   predicates: []
+                 }
+               ]
+             } == results
+    end
+
     test "parses a query with a multiple logical operator" do
       results = Query.new("trace_id == 'test123' and profile_id == '123' or user_id == '123'")
 

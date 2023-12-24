@@ -59,10 +59,10 @@ defmodule Predicated.Query.Parser do
     |> choice([
       string("=="),
       string("!="),
+      string(">="),
+      string("<="),
       string(">"),
       string("<"),
-      string("=>"),
-      string("<="),
       string("IN"),
       string("in"),
       string("CONTAINS"),
