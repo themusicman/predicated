@@ -147,14 +147,176 @@ assert Predicated.test("inserted_at >= '2020-01-01T01:50:07Z'::DATETIME", %{
 }) == true
 ```
 
+## Ecto Integration
+
+Integrating with Ecto it a bit of a manual process at the moment. My hopes are to write some macros that make this less tedious. 
+
+The first snippet here constructs a query and then applies the predicates to the query. See the next snippet for how to apply the predicates to the Ecto query.
+
+```elixir
+def list_events_for_topic(
+        offset: offset,
+        batch_size: batch_size,
+        topic_name: topic_name,
+        topic_identifier: topic_identifier,
+        predicates: predicates
+      ) do
+  query =
+    from_events_for_topic(topic_name: topic_name)
+    |> where(as(:events).topic_name == ^topic_name)
+    |> apply_ordering(predicates)
+    |> where(not is_nil(as(:events).occurred_at))
+    |> where_available()
+
+  query =
+    unless ER.empty?(topic_identifier) do
+      where(query, as(:events).topic_identifier == ^topic_identifier)
+    else
+      query
+    end
+
+  query =
+    if Flamel.present?(predicates) do
+      conditions = apply_predicates(predicates, nil, nil)
+      from query, where: ^conditions
+    else
+      query
+    end
+
+  ER.BatchedResults.new(query, %{"offset" => offset, "batch_size" => batch_size})
+end
+```
+
+Below is a snippet from a [module](https://github.com/eventrelay/eventrelay/blob/main/lib/event_relay/events/predicates.ex) that takes in predicates and applies them to an Ecto query.
+
+```elixir
+
+ def apply_predicates([predicate | predicates], nil, nil) do
+    # first iteration
+    conditions = apply_predicate(predicate, dynamic(true), nil)
+    apply_predicates(predicates, conditions, predicate)
+  end
+
+  def apply_predicates([predicate | predicates], conditions, previous_predicate) do
+    conditions = apply_predicate(predicate, conditions, previous_predicate)
+    apply_predicates(predicates, conditions, predicate)
+  end
+
+  def apply_predicates([], conditions, _previous_predicate) do
+    conditions
+  end
+
+  def apply_predicate(%{predicates: predicates}, conditions, previous_predicate)
+      when length(predicates) > 0 do
+    nested_conditions = apply_predicates(predicates, dynamic(true), previous_predicate)
+
+    case previous_predicate do
+      nil ->
+        dynamic([events: events], ^conditions and ^nested_conditions)
+
+      %{logical_operator: :and} ->
+        dynamic([events: events], ^conditions and ^nested_conditions)
+
+      %{logical_operator: :or} ->
+        dynamic([events: events], ^conditions or ^nested_conditions)
+    end
+  end
+
+  def apply_predicate(
+        %{
+          condition: %{identifier: "data." <> path, comparison_operator: "==", expression: value}
+        },
+        conditions,
+        previous_predicate
+      ) do
+    path = parse_path(path)
+
+    case previous_predicate do
+      nil ->
+        dynamic([events: events], ^conditions and json_extract_path(events.data, ^path) == ^value)
+
+      %{logical_operator: :and} ->
+        dynamic([events: events], ^conditions and json_extract_path(events.data, ^path) == ^value)
+
+      %{logical_operator: :or} ->
+        dynamic([events: events], ^conditions or json_extract_path(events.data, ^path) == ^value)
+
+      _ ->
+        conditions
+    end
+  end
+
+  def apply_predicate(
+        %{
+          condition: %{
+            identifier: "context." <> path,
+            comparison_operator: "==",
+            expression: value
+          }
+        },
+        conditions,
+        previous_predicate
+      ) do
+    path = parse_path(path)
+
+    case previous_predicate do
+      nil ->
+        dynamic(
+          [events: events],
+          ^conditions and json_extract_path(events.context, ^path) == ^value
+        )
+
+      %{logical_operator: :and} ->
+        dynamic(
+          [events: events],
+          ^conditions and json_extract_path(events.context, ^path) == ^value
+        )
+
+      %{logical_operator: :or} ->
+        dynamic(
+          [events: events],
+          ^conditions or json_extract_path(events.context, ^path) == ^value
+        )
+
+      _ ->
+        conditions
+    end
+  end
+
+  def apply_predicate(
+        %{
+          condition: %{identifier: field, comparison_operator: "==", expression: value}
+        },
+        conditions,
+        previous_predicate
+      ) do
+    field = String.to_atom(field)
+
+    case previous_predicate do
+      nil ->
+        dynamic([events: events], ^conditions and field(events, ^field) == ^value)
+
+      %{logical_operator: :and} ->
+        dynamic([events: events], ^conditions and field(events, ^field) == ^value)
+
+      %{logical_operator: :or} ->
+        dynamic([events: events], ^conditions or field(events, ^field) == ^value)
+
+      _ ->
+        conditions
+    end
+  end
+```
+
 
 ## TODO
 
 - [x] Implement grouped/nested predicates in the query parser
-- [ ] Better handle non-terminal conditions when predicates are malformed
-- [ ] Add debugger that displays all the conditions and their results
-- [ ] Update docs to include example of using Ecto to store the predicates
+- [x] Update docs to include example of using it with Ecto
+- [x] Better handle non-terminal conditions when predicates are malformed
 - [ ] More tests
+- [ ] Write some macros that make integrating with Ecto nicer and drier
+- [ ] Add debugger that displays all the conditions and their results
 
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
