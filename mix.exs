@@ -26,7 +26,7 @@ defmodule Predicated.MixProject do
   defp deps do
     [
       {:nimble_parsec, "~> 1.2"},
-      {:flamel, github: "themusicman/flamel", branch: "main"},
+      {:flamel, "~> 1.4"},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
