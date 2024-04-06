@@ -70,6 +70,26 @@ defmodule Predicated.QueryTest do
              } == results
     end
 
+    test "parses a query with an email address in an expression" do
+      results =
+        Query.new("email == 'test@user.com'")
+
+      assert {
+               :ok,
+               [
+                 %Predicate{
+                   condition: %Condition{
+                     identifier: "email",
+                     comparison_operator: "==",
+                     expression: "test@user.com"
+                   },
+                   logical_operator: nil,
+                   predicates: []
+                 }
+               ]
+             } == results
+    end
+
     test "parses a query with a logical operator" do
       results = Query.new("trace_id == 'test123' and profile_id == '123'")
 

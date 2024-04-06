@@ -30,7 +30,7 @@ defmodule Predicated.Query.Parser do
   string_expression =
     ignore(whitespace)
     |> ignore(string("'"))
-    |> utf8_string([?a..?z, ?A..?Z, ?0..?9, ?_, ?=, ?>, ?<, ?\s, ?-, ?:, ?.], min: 1)
+    |> utf8_string([{:not, ?'}], min: 1)
     |> ignore(string("'"))
     |> optional(cast)
     |> reduce({Enum, :join, [""]})
