@@ -1,7 +1,82 @@
 defmodule Predicated.Predicate do
-  # patient_id == 1 AND (provider_id == 2 OR provider_id == 3) 
+  @moduledoc """
+  Represents a predicate used for testing conditions against data.
+
+  A predicate can contain either:
+  - A single condition to evaluate
+  - A group of nested predicates (for grouped expressions)
+  
+  Each predicate has an optional logical operator that determines how it
+  combines with the next predicate in a list.
+
+  ## Structure
+
+  - `:condition` - A %Condition{} struct defining what to test
+  - `:logical_operator` - Either :and or :or (applies to the NEXT predicate)
+  - `:predicates` - List of nested predicates for grouped expressions
+
+  ## Examples
+
+      # Simple predicate
+      %Predicate{
+        condition: %Condition{
+          identifier: "status",
+          comparison_operator: "==",
+          expression: "active"
+        },
+        logical_operator: :and
+      }
+
+      # Grouped predicates: (role == 'admin' OR role == 'moderator')
+      %Predicate{
+        predicates: [
+          %Predicate{
+            condition: %Condition{
+              identifier: "role",
+              comparison_operator: "==",
+              expression: "admin"
+            },
+            logical_operator: :or
+          },
+          %Predicate{
+            condition: %Condition{
+              identifier: "role",
+              comparison_operator: "==",
+              expression: "moderator"
+            }
+          }
+        ],
+        logical_operator: :and
+      }
+  """
+  
   defstruct condition: nil, logical_operator: nil, predicates: []
 
+  @doc """
+  Converts a predicate struct to its query string representation.
+
+  Handles both simple predicates with conditions and grouped predicates
+  with nested predicates. Grouped predicates are wrapped in parentheses.
+
+  ## Parameters
+    - `predicate` - A %Predicate{} struct
+
+  ## Returns
+    String representation of the predicate
+
+  ## Examples
+
+      iex> predicate = %Predicate{
+      ...>   condition: %Condition{
+      ...>     identifier: "age",
+      ...>     comparison_operator: ">",
+      ...>     expression: 21
+      ...>   },
+      ...>   logical_operator: :and
+      ...> }
+      iex> Predicated.Predicate.to_query(predicate)
+      "age > 21 AND"
+  """
   def to_query(%{predicates: predicates} = predicate) when length(predicates) > 0 do
     grouping =
       Enum.reduce(predicates, [], fn predicate, acc ->

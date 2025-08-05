@@ -1,8 +1,77 @@
 defmodule Predicated.Query do
+  @moduledoc """
+  Handles parsing and compilation of query strings into predicate structures.
+
+  This module provides the main interface for converting query strings into
+  predicate structs that can be evaluated by the Predicated module. It handles
+  type casting, operator precedence, and nested expressions.
+
+  ## Query String Syntax
+
+  ### Basic Syntax
+  - Identifiers can contain letters, numbers, underscores, and dots
+  - String values must be wrapped in single quotes: `'value'`
+  - Numbers can be integers or floats: `42`, `3.14`, `-10`
+  - Booleans: `true`, `TRUE`, `false`, `FALSE`
+  - Lists: `[1, 2, 3]` or `['a', 'b', 'c']`
+
+  ### Operators
+  - Comparison: `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `IN`, `contains`, `CONTAINS`
+  - Logical: `AND`, `and`, `OR`, `or`
+  - Grouping: `(` and `)` for precedence
+
+  ### Type Casting
+  - Dates: `'2023-01-01'::DATE`
+  - DateTimes: `'2023-01-01T10:00:00Z'::DATETIME`
+
+  ## Examples
+
+      # Simple query
+      Query.new("status == 'active'")
+
+      # Compound query with AND/OR
+      Query.new("status == 'active' AND (role == 'admin' OR role == 'moderator')")
+
+      # Numeric comparisons
+      Query.new("age >= 18 AND score > 75.5")
+
+      # Date comparisons
+      Query.new("created_at > '2023-01-01'::DATE")
+
+      # List operations
+      Query.new("user_id in [123, 456, 789]")
+      Query.new("tags contains 'important'")
+
+      # Nested field access
+      Query.new("user.profile.verified == true")
+  """
+  
   alias Predicated.Query.Parser
   alias Predicated.Predicate
   alias Predicated.Condition
 
+  @doc """
+  Parses a query string into a list of predicate structs.
+
+  Takes a query string and returns either a success tuple with the parsed
+  predicates or an error tuple with the reason for failure.
+
+  ## Parameters
+    - `string` - The query string to parse
+
+  ## Returns
+    - `{:ok, predicates}` - Success with list of %Predicate{} structs
+    - `{:error, reason}` - Error with the reason (e.g., {:error, unparsed: "remaining text"})
+
+  ## Examples
+
+      iex> {:ok, predicates} = Query.new("name == 'John' AND age > 21")
+      iex> length(predicates)
+      2
+
+      iex> Query.new("invalid syntax")
+      {:error, "expected string while processing..."}
+  """
   def new(string) when is_binary(string) do
     case Parser.parse(string) do
       {:ok, results, "", _, _, _} ->

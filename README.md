@@ -309,6 +309,170 @@ Below is a snippet from a [module](https://github.com/eventrelay/eventrelay/blob
 ```
 
 
+## API Reference
+
+### Core Functions
+
+#### `Predicated.test/3`
+Tests predicates against a subject data structure.
+
+```elixir
+# With query string
+Predicated.test("status == 'active'", %{status: "active"})
+#=> true
+
+# With predicate structs
+predicates = [%Predicate{condition: %Condition{...}}]
+Predicated.test(predicates, %{...})
+#=> true
+```
+
+#### `Predicated.Query.new/1`
+Parses a query string into predicate structs.
+
+```elixir
+{:ok, predicates} = Predicated.Query.new("age > 18 AND verified == true")
+```
+
+#### `Predicated.to_query/1`
+Converts predicate structs back to a query string.
+
+```elixir
+query_string = Predicated.to_query(predicates)
+#=> "age > 18 AND verified == true"
+```
+
+### Supported Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `==` | Equality | `status == 'active'` |
+| `!=` | Inequality | `status != 'deleted'` |
+| `>` | Greater than | `age > 18` |
+| `>=` | Greater than or equal | `score >= 75` |
+| `<` | Less than | `price < 100.00` |
+| `<=` | Less than or equal | `quantity <= 10` |
+| `contains` | List contains value | `tags contains 'featured'` |
+| `in` | Value in list | `status in ['active', 'pending']` |
+
+### Type Support
+
+#### Strings
+```elixir
+Predicated.test("name == 'John Doe'", %{name: "John Doe"})
+```
+
+#### Numbers (Integer and Float)
+```elixir
+Predicated.test("age >= 21 AND score > 85.5", %{age: 25, score: 90.0})
+```
+
+#### Booleans
+```elixir
+Predicated.test("verified == true AND active == FALSE", %{verified: true, active: false})
+```
+
+#### Dates
+```elixir
+Predicated.test("birth_date < '2000-01-01'::DATE", %{birth_date: ~D[1995-05-15]})
+```
+
+#### DateTimes
+```elixir
+Predicated.test("created_at >= '2023-01-01T00:00:00Z'::DATETIME", %{
+  created_at: ~U[2023-06-15 10:30:00Z]
+})
+```
+
+#### Lists
+```elixir
+# Check if list contains value
+Predicated.test("tags contains 'elixir'", %{tags: ["elixir", "phoenix", "nerves"]})
+
+# Check if value is in list
+Predicated.test("role in ['admin', 'moderator']", %{role: "admin"})
+```
+
+### Nested Field Access
+
+Access nested fields using dot notation:
+
+```elixir
+data = %{
+  user: %{
+    profile: %{
+      settings: %{
+        theme: "dark",
+        notifications: true
+      }
+    }
+  }
+}
+
+Predicated.test("user.profile.settings.theme == 'dark'", data)
+#=> true
+```
+
+### Complex Queries
+
+#### Combining Conditions
+```elixir
+# AND has higher precedence than OR
+Predicated.test("a == 1 OR b == 2 AND c == 3", %{a: 1, b: 5, c: 3})
+#=> true (evaluates as: a == 1 OR (b == 2 AND c == 3))
+```
+
+#### Grouping with Parentheses
+```elixir
+# Use parentheses to control precedence
+Predicated.test("(a == 1 OR b == 2) AND c == 3", %{a: 5, b: 2, c: 3})
+#=> true
+```
+
+#### Multi-level Nesting
+```elixir
+query = """
+organization_id == '123' AND (
+  role == 'admin' OR 
+  (role == 'user' AND permissions contains 'write') OR
+  (department == 'IT' AND level >= 3)
+)
+"""
+
+Predicated.test(query, %{
+  organization_id: "123",
+  role: "user", 
+  permissions: ["read", "write"],
+  department: "Sales",
+  level: 2
+})
+#=> true
+```
+
+## Error Handling
+
+Query parsing errors return error tuples:
+
+```elixir
+case Predicated.Query.new("invalid == ") do
+  {:ok, predicates} -> 
+    # Use predicates
+  {:error, reason} ->
+    # Handle error
+    IO.puts("Parse error: #{inspect(reason)}")
+end
+```
+
+Common error types:
+- `{:error, unparsed: "remaining text"}` - Query has unparsed remainder
+- `{:error, "expected..."}` - Syntax error with expectation
+
+## Performance Considerations
+
+- Predicates are evaluated in-memory, suitable for filtering small to medium datasets
+- For large datasets, consider using the Ecto integration to push filtering to the database
+- Query string parsing has a one-time cost; reuse parsed predicates when possible
+
 ## TODO
 
 - [x] Implement grouped/nested predicates in the query parser
@@ -317,6 +481,19 @@ Below is a snippet from a [module](https://github.com/eventrelay/eventrelay/blob
 - [ ] More tests
 - [ ] Write some macros that make integrating with Ecto nicer and drier
 - [ ] Add debugger that displays all the conditions and their results
+- [ ] Support for additional operators (like, starts_with, ends_with, regex)
+- [ ] Support for nil/null checks
+- [ ] Support for custom operators
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Documentation
 
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can

@@ -1,4 +1,48 @@
 defmodule Predicated.Query.Parser do
+  @moduledoc """
+  Parser for converting query strings into structured predicate data.
+
+  Built using NimbleParsec, this module defines the grammar for parsing
+  predicate query strings. It handles operator precedence (AND before OR),
+  grouping with parentheses, and various expression types.
+
+  ## Grammar Overview
+
+  The parser implements a recursive descent grammar with the following precedence:
+  1. Parentheses (highest)
+  2. Comparison operators (==, !=, >, etc.)
+  3. AND operator
+  4. OR operator (lowest)
+
+  ## Expression Types
+
+  - **Identifiers**: Letters, numbers, underscores, dots (e.g., `user.name`, `count_1`)
+  - **Strings**: Single-quoted with optional type casting (e.g., `'hello'`, `'2023-01-01'::DATE`)
+  - **Numbers**: Integers and floats, including negative (e.g., `42`, `-3.14`)
+  - **Booleans**: `true`, `TRUE`, `false`, `FALSE`
+  - **Lists**: Comma-separated values in brackets (e.g., `[1, 2, 3]`, `['a', 'b']`)
+
+  ## Parsing Process
+
+  1. The input string is tokenized according to the grammar rules
+  2. Expressions are grouped by operator precedence
+  3. The result is a nested structure ready for compilation into predicates
+
+  ## Examples
+
+      # Simple comparison
+      Parser.parse("age > 18")
+      
+      # Grouped expression with OR
+      Parser.parse("(status == 'active' OR status == 'pending') AND verified == true")
+      
+      # Complex nested query
+      Parser.parse("org_id == '123' AND (role == 'admin' OR (role == 'user' AND permissions contains 'read'))")
+
+  Note: This module is primarily used internally by `Predicated.Query.new/1`.
+  Direct usage is not recommended unless you need low-level parsing control.
+  """
+  
   import NimbleParsec
 
   lparen = ascii_char([?(]) |> label("(")
