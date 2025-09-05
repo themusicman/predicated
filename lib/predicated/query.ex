@@ -73,7 +73,10 @@ defmodule Predicated.Query do
       {:error, "expected string while processing..."}
   """
   def new(string) when is_binary(string) do
-    case Parser.parse(string) do
+    # Trim whitespace and normalize multiline queries
+    normalized = String.trim(string)
+
+    case Parser.parse(normalized) do
       {:ok, results, "", _, _, _} ->
         results =
           results
@@ -81,7 +84,10 @@ defmodule Predicated.Query do
           |> compile_results([])
           |> Enum.reverse()
 
-        {:ok, results}
+        case validate_results(results) do
+          :ok -> {:ok, results}
+          {:error, reason} -> {:error, reason}
+        end
 
       {:ok, _results, rest, _, _, _} ->
         {:error, unparsed: rest}
@@ -123,7 +129,7 @@ defmodule Predicated.Query do
 
         predicates =
           group
-          |> Enum.chunk_every(4)
+          |> chunk_results()
           |> compile_results([])
           |> Enum.reverse()
 
@@ -139,7 +145,7 @@ defmodule Predicated.Query do
           %Predicate{
             condition: %Condition{
               identifier: Keyword.get(result, :identifier),
-              comparison_operator: Keyword.get(result, :comparison_operator),
+              comparison_operator: normalize_comparison_operator(Keyword.get(result, :comparison_operator)),
               expression: get_expression(result)
             },
             logical_operator: get_logical_operator(result)
@@ -157,12 +163,14 @@ defmodule Predicated.Query do
     number = Keyword.get(result, :number_expression)
     boolean = Keyword.get(result, :boolean_expression)
     list = Keyword.get(result, :list_expression)
+    nil_expr = Keyword.get(result, :nil_expression)
 
-    case {string, number, boolean, list} do
-      {value, nil, nil, nil} -> value |> cast_date() |> cast_datetime() |> cast_string()
-      {nil, value, nil, nil} -> cast_number(value)
-      {nil, nil, value, nil} -> cast_boolean(value)
-      {nil, nil, nil, value} -> cast_list(value)
+    case {string, number, boolean, list, nil_expr} do
+      {value, nil, nil, nil, nil} -> value |> cast_date() |> cast_datetime() |> cast_string()
+      {nil, value, nil, nil, nil} -> cast_number(value)
+      {nil, nil, value, nil, nil} -> cast_boolean(value)
+      {nil, nil, nil, value, nil} -> cast_list(value)
+      {nil, nil, nil, nil, value} -> cast_nil(value)
     end
     |> Flamel.unwrap_ok_or_nil()
   end
@@ -173,6 +181,7 @@ defmodule Predicated.Query do
 
   def cast(value) do
     value
+    |> cast_nil()
     |> cast_datetime()
     |> cast_date()
     |> cast_boolean()
@@ -183,27 +192,31 @@ defmodule Predicated.Query do
 
   def cast_list(value) when is_binary(value) do
     if list?(value) do
-      list =
+      inner =
         value
-        |> String.replace_prefix("[", "")
-        |> String.replace_suffix("]", "")
-        |> String.split(",", trim: true)
-        |> Enum.map(fn i ->
-          v = String.trim(i)
+        |> String.trim()
+        |> String.trim_leading("[")
+        |> String.trim_trailing("]")
 
-          # this is a bad idea
-          case Regex.run(~r/'(.*)'(::(.*))?/, v) do
-            [_ | rest] ->
-              case rest do
-                [date, cast_as, _] ->
-                  v = "#{date}#{cast_as}"
-                  cast(v)
+      items = split_list_elements(inner)
 
-                [v] ->
-                  cast(v)
-              end
+      list =
+        items
+        |> Enum.map(fn raw ->
+          v = String.trim(raw)
+
+          # If quoted string with optional ::CAST, preserve inner content and cast
+          case Regex.run(~r/^'(.*)'(?:::(\w+))?$/us, v) do
+            [_, content, cast_as] when not is_nil(cast_as) ->
+              # Only support explicit casts for quoted strings (e.g., '2023-01-01'::DATE)
+              cast("#{content}::#{cast_as}")
+
+            [_, content] ->
+              # Preserve quoted strings as plain strings
+              content
 
             _ ->
+              # Unquoted values should be cast normally
               cast(v)
           end
         end)
@@ -216,6 +229,33 @@ defmodule Predicated.Query do
 
   def cast_list(value), do: value
 
+  defp split_list_elements("") do
+    []
+  end
+
+  defp split_list_elements(string) do
+    # Split by commas that are not inside single-quoted strings
+    graphemes = String.graphemes(string)
+
+    {parts, current, _in_string} =
+      Enum.reduce(graphemes, {[], [], false}, fn ch, {acc, cur, in_str} ->
+        cond do
+          ch == "'" ->
+            {acc, [ch | cur], not in_str}
+
+          ch == "," and not in_str ->
+            {[Enum.reverse(cur) |> Enum.join("") | acc], [], in_str}
+
+          true ->
+            {acc, [ch | cur], in_str}
+        end
+      end)
+
+    parts = [Enum.reverse(current) |> Enum.join("") | parts]
+    parts |> Enum.reverse() |> Enum.map(& &1)
+  end
+
+  
   def date?(string) when is_binary(string), do: String.contains?(string, "::DATE")
   def date?(_), do: false
 
@@ -254,21 +294,71 @@ defmodule Predicated.Query do
 
   def cast_datetime(value), do: value
 
+  defp contains_cast_suffix?(value) when is_binary(value) do
+    String.contains?(value, "::DATE") or String.contains?(value, "::DATETIME")
+  end
+  defp contains_cast_suffix?(_), do: false
+
+  defp invalid_cast?(value) when is_list(value) do
+    Enum.any?(value, &invalid_cast?/1)
+  end
+
+  defp invalid_cast?(value) do
+    is_binary(value) and contains_cast_suffix?(value)
+  end
+
+  def validate_results(results) do
+    cond do
+      Enum.any?(results, &invalid_in_predicate?/1) -> {:error, :invalid_cast}
+      Enum.any?(results, &unsupported_length_size?/1) -> {:error, :unsupported_length_size}
+      true -> :ok
+    end
+  end
+
+  defp unsupported_length_size?(%Predicate{condition: %Condition{identifier: id}}) when is_binary(id) do
+    String.contains?(id, ".length") or String.contains?(id, ".size")
+  end
+  defp unsupported_length_size?(%Predicate{predicates: predicates}) when is_list(predicates) do
+    Enum.any?(predicates, &unsupported_length_size?/1)
+  end
+  defp unsupported_length_size?(_), do: false
+
+  defp invalid_in_predicate?(%Predicate{condition: %Condition{expression: expr}}), do: invalid_cast?(expr)
+  defp invalid_in_predicate?(%Predicate{predicates: predicates}) when is_list(predicates) do
+    Enum.any?(predicates, &invalid_in_predicate?/1)
+  end
+  defp invalid_in_predicate?(_), do: false
+
   def cast_boolean("TRUE"), do: {:ok, true}
+  def cast_boolean("True"), do: {:ok, true}
   def cast_boolean("true"), do: {:ok, true}
   def cast_boolean("FALSE"), do: {:ok, false}
+  def cast_boolean("False"), do: {:ok, false}
   def cast_boolean("false"), do: {:ok, false}
   def cast_boolean(value), do: value
 
-  def number?(value) when is_binary(value), do: !String.match?(value, ~r/[a-zA-Z]+/)
+  def cast_nil("nil"), do: {:ok, nil}
+  def cast_nil("NIL"), do: {:ok, nil}
+  def cast_nil("Nil"), do: {:ok, nil}
+  def cast_nil("null"), do: {:ok, nil}
+  def cast_nil("NULL"), do: {:ok, nil}
+  def cast_nil("Null"), do: {:ok, nil}
+  def cast_nil(value), do: value
+
+  def number?(value) when is_binary(value) do
+    # Allow scientific notation (e.g., 1.23e10, 1.23E-5)
+    String.match?(value, ~r/^-?[0-9]*\.?[0-9]+([eE][+-]?[0-9]+)?$/)
+  end
   def number?(value) when is_integer(value), do: true
   def number?(value) when is_float(value), do: true
   def number?(_), do: false
 
   def cast_number(value) when is_binary(value) do
     if number?(value) do
-      if String.contains?(value, ".") do
-        case Float.parse(value) do
+      if String.contains?(value, ".") or String.contains?(value, "e") or String.contains?(value, "E") do
+        # Handle leading decimal like .5 by prepending "0"
+        normalized_value = if String.starts_with?(value, "."), do: "0" <> value, else: value
+        case Float.parse(normalized_value) do
           {number, _remainder} -> {:ok, number}
           _ -> value
         end
@@ -286,6 +376,11 @@ defmodule Predicated.Query do
   def cast_number(value), do: value
 
   def cast_string({:ok, _} = value), do: value
+  def cast_string(value) when is_binary(value) do
+    # Unescape backslashes
+    unescaped = String.replace(value, "\\\\", "\\")
+    {:ok, unescaped}
+  end
   def cast_string(value), do: {:ok, value}
 
   def get_logical_operator([_, _, _, logical_operator]) when is_binary(logical_operator) do
@@ -297,4 +392,10 @@ defmodule Predicated.Query do
   def get_logical_operator(_) do
     nil
   end
+
+  defp normalize_comparison_operator(op) when is_binary(op) do
+    String.downcase(op)
+  end
+
+  defp normalize_comparison_operator(op), do: op
 end

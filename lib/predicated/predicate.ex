@@ -66,8 +66,8 @@ defmodule Predicated.Predicate do
 
   ## Examples
 
-      iex> predicate = %Predicate{
-      ...>   condition: %Condition{
+      iex> predicate = %Predicated.Predicate{
+      ...>   condition: %Predicated.Condition{
       ...>     identifier: "age",
       ...>     comparison_operator: ">",
       ...>     expression: 21

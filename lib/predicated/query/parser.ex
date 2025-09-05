@@ -50,21 +50,44 @@ defmodule Predicated.Query.Parser do
 
   whitespace = ascii_char([32, ?\t, ?\n]) |> times(min: 1) |> label("whitespace")
 
-  indentifier =
-    utf8_string([?a..?z, ?A..?Z, ?0..?9, ?_, ?.], min: 1)
+  # Identifier must be one or more dot-separated segments.
+  # Each segment must start with a letter or underscore, followed by letters, digits, or underscores.
+  identifier_segment =
+    utf8_string([?a..?z, ?A..?Z, ?_], 1)
+    |> optional(utf8_string([?a..?z, ?A..?Z, ?0..?9, ?_], min: 0))
     |> reduce({Enum, :join, [""]})
+
+  indentifier =
+    identifier_segment
+    |> repeat(ignore(string(".")) |> concat(identifier_segment))
+    |> reduce({Enum, :join, ["."]})
     |> unwrap_and_tag(:identifier)
 
   boolean_expression =
-    ignore(whitespace)
+    ignore(optional(whitespace))
     |> choice([
       string("true"),
       string("TRUE"),
+      string("True"),
       string("false"),
-      string("FALSE")
+      string("FALSE"),
+      string("False")
     ])
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:boolean_expression)
+
+  nil_expression =
+    ignore(optional(whitespace))
+    |> choice([
+      string("nil"),
+      string("NIL"),
+      string("Nil"),
+      string("null"),
+      string("NULL"),
+      string("Null")
+    ])
+    |> reduce({Enum, :join, [""]})
+    |> unwrap_and_tag(:nil_expression)
 
   cast =
     empty()
@@ -72,34 +95,35 @@ defmodule Predicated.Query.Parser do
     |> utf8_string([?a..?z, ?A..?Z], min: 1)
 
   string_expression =
-    ignore(whitespace)
+    ignore(optional(whitespace))
     |> ignore(string("'"))
-    |> utf8_string([{:not, ?'}], min: 1)
+    |> utf8_string([{:not, ?'}], min: 0)
     |> ignore(string("'"))
     |> optional(cast)
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:string_expression)
 
+  # Support integers, floats, and scientific notation (e.g., 1.23e10, .5, -1e-9)
   number_expression =
-    ignore(whitespace)
+    ignore(optional(whitespace))
     |> optional(string("-"))
-    |> choice([utf8_string([?0..?9, ?.], min: 1), integer(min: 1)])
+    |> utf8_string([?0..?9, ?., ?e, ?E, ?+, ?-], min: 1)
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:number_expression)
 
   list_expression =
-    ignore(whitespace)
+    ignore(optional(whitespace))
     |> string("[")
-    |> utf8_string([?a..?z, ?A..?Z, ?0..?9, ?_, ?=, ?>, ?<, ?\s, ?-, ?:, ?., ?\,, ?'], min: 1)
+    |> utf8_string([?a..?z, ?A..?Z, ?0..?9, ?_, ?=, ?>, ?<, ?\s, ?-, ?:, ?., ?\,, ?'], min: 0)
     |> string("]")
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:list_expression)
 
   expression =
-    choice([list_expression, boolean_expression, string_expression, number_expression])
+    choice([list_expression, boolean_expression, nil_expression, string_expression, number_expression])
 
   comparison_operator =
-    ignore(whitespace)
+    ignore(optional(whitespace))
     |> choice([
       string("=="),
       string("!="),
@@ -107,8 +131,11 @@ defmodule Predicated.Query.Parser do
       string("<="),
       string(">"),
       string("<"),
+      string("NOT CONTAINS"),
+      string("not contains"),
       string("IN"),
       string("in"),
+      string("In"),
       string("CONTAINS"),
       string("contains")
     ])
@@ -126,7 +153,9 @@ defmodule Predicated.Query.Parser do
     empty()
     |> choice([
       ignore(lparen)
+      |> ignore(optional(whitespace))
       |> concat(parsec(:expr))
+      |> ignore(optional(whitespace))
       |> ignore(rparen)
       |> tag(:grouping),
       comparison
@@ -138,7 +167,7 @@ defmodule Predicated.Query.Parser do
     |> choice([
       grouping
       |> ignore(optional(whitespace))
-      |> choice([string("AND"), string("and")])
+      |> choice([string("AND"), string("and"), string("And")])
       |> ignore(optional(whitespace))
       |> concat(parsec(:term)),
       grouping
@@ -151,7 +180,7 @@ defmodule Predicated.Query.Parser do
     |> choice([
       parsec(:term)
       |> ignore(optional(whitespace))
-      |> choice([string("OR"), string("or")])
+      |> choice([string("OR"), string("or"), string("Or")])
       |> ignore(optional(whitespace))
       |> concat(parsec(:expr)),
       parsec(:term)

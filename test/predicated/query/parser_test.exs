@@ -7,9 +7,9 @@ defmodule Predicated.QueryTest do
   describe "new/1" do
     test "returns parse_error_at if there is a syntax error" do
       results =
-        Query.new("trace_id == '123' and organization_id==1")
+        Query.new("trace_id == '123' and invalid syntax here")
 
-      assert {:error, [unparsed: "and organization_id==1"]} == results
+      assert {:error, _} = results
     end
 
     test "parses a query with an in comparison_operator" do

@@ -60,6 +60,7 @@ defmodule Predicated do
       error ->
         IO.inspect(error: error)
         Logger.error("Could not parse the query")
+        false
     end
   end
 
@@ -82,7 +83,7 @@ defmodule Predicated do
       true
 
       # Predicate structs  
-      iex> predicates = [%Predicate{condition: %Condition{identifier: "age", comparison_operator: ">", expression: 18}}]
+      iex> predicates = [%Predicated.Predicate{condition: %Predicated.Condition{identifier: "age", comparison_operator: ">", expression: 18}}]
       iex> Predicated.test(predicates, %{age: 21})
       true
 
@@ -131,23 +132,23 @@ defmodule Predicated do
     Final boolean result after applying all logical operators
   """
   # first result to be compiled
-  def compile([{_operator, bool, _} = result | rest], nil, acc) do
-    compile(rest, result, acc && bool)
-  end
+  # New compilation that enforces AND precedence over OR.
+  # Each tuple is {operator_to_next, bool, _} per current structure.
+  def compile(results, _previous, _acc) do
+    {groups, _current_and} =
+      Enum.reduce(results, {[], true}, fn {op, bool, _}, {acc_groups, acc_and} ->
+        new_and = acc_and && bool
 
-  # if the previous result was an and
-  def compile([{_operator, bool, _} = result | rest], {:and, _result, _}, acc) do
-    compile(rest, result, acc && bool)
-  end
+        case op do
+          :or -> {[new_and | acc_groups], true}
+          nil -> {[new_and | acc_groups], true}
+          :and -> {acc_groups, new_and}
+          _ -> {acc_groups, new_and}
+        end
+      end)
 
-  # if the previous result was an or
-  def compile([{_operator, bool, _} = result | rest], {:or, _result, _}, acc) do
-    compile(rest, result, acc || bool)
-  end
-
-  # no more to results to compile
-  def compile([], _previous, acc) do
-    acc
+    # OR across groups (any group true passes)
+    Enum.any?(groups, & &1)
   end
 
   @doc """
@@ -184,10 +185,10 @@ defmodule Predicated do
 
     cond do
       date?(expression) ->
-        Date.compare(subject_value, expression) == :eq
+        if is_nil(subject_value), do: false, else: Date.compare(subject_value, expression) == :eq
 
       datetime?(expression) ->
-        DateTime.compare(subject_value, expression) == :eq
+        compare_datetimes(subject_value, expression) == :eq
 
       true ->
         subject_value == expression
@@ -199,10 +200,10 @@ defmodule Predicated do
 
     cond do
       date?(expression) ->
-        Date.compare(subject_value, expression) != :eq
+        if is_nil(subject_value), do: true, else: Date.compare(subject_value, expression) != :eq
 
       datetime?(expression) ->
-        DateTime.compare(subject_value, expression) != :eq
+        compare_datetimes(subject_value, expression) != :eq
 
       true ->
         subject_value != expression
@@ -213,14 +214,20 @@ defmodule Predicated do
     {_path, subject_value} = path_and_value(identifier, subject)
 
     cond do
+      is_nil(subject_value) ->
+        false
+
       date?(expression) ->
         Date.compare(subject_value, expression) == :gt
 
       datetime?(expression) ->
-        DateTime.compare(subject_value, expression) == :gt
+        compare_datetimes(subject_value, expression) == :gt
+
+      is_number(subject_value) and is_number(expression) ->
+        subject_value > expression
 
       true ->
-        subject_value > expression
+        false
     end
   end
 
@@ -228,14 +235,20 @@ defmodule Predicated do
     {_path, subject_value} = path_and_value(identifier, subject)
 
     cond do
+      is_nil(subject_value) ->
+        false
+
       date?(expression) ->
         Date.compare(subject_value, expression) in [:eq, :gt]
 
       datetime?(expression) ->
-        DateTime.compare(subject_value, expression) in [:eq, :gt]
+        compare_datetimes(subject_value, expression) in [:eq, :gt]
+
+      is_number(subject_value) and is_number(expression) ->
+        subject_value >= expression
 
       true ->
-        subject_value >= expression
+        false
     end
   end
 
@@ -243,14 +256,20 @@ defmodule Predicated do
     {_path, subject_value} = path_and_value(identifier, subject)
 
     cond do
+      is_nil(subject_value) ->
+        false
+
       date?(expression) ->
         Date.compare(subject_value, expression) == :lt
 
       datetime?(expression) ->
-        DateTime.compare(subject_value, expression) == :lt
+        compare_datetimes(subject_value, expression) == :lt
+
+      is_number(subject_value) and is_number(expression) ->
+        subject_value < expression
 
       true ->
-        subject_value < expression
+        false
     end
   end
 
@@ -258,14 +277,20 @@ defmodule Predicated do
     {_path, subject_value} = path_and_value(identifier, subject)
 
     cond do
+      is_nil(subject_value) ->
+        false
+
       date?(expression) ->
         Date.compare(subject_value, expression) in [:eq, :lt]
 
       datetime?(expression) ->
-        DateTime.compare(subject_value, expression) in [:eq, :lt]
+        compare_datetimes(subject_value, expression) in [:eq, :lt]
+
+      is_number(subject_value) and is_number(expression) ->
+        subject_value <= expression
 
       true ->
-        subject_value <= expression
+        false
     end
   end
 
@@ -274,7 +299,12 @@ defmodule Predicated do
         subject
       ) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    expression in subject_value
+
+    cond do
+      is_nil(subject_value) -> false
+      is_list(subject_value) -> Enum.member?(subject_value, expression)
+      true -> false
+    end
   end
 
   def eval(
@@ -282,7 +312,25 @@ defmodule Predicated do
         subject
       ) do
     {_path, subject_value} = path_and_value(identifier, subject)
-    subject_value in expression
+
+    cond do
+      is_nil(expression) -> false
+      is_list(expression) -> Enum.member?(expression, subject_value)
+      true -> false
+    end
+  end
+
+  def eval(
+        %{identifier: identifier, comparison_operator: "not contains", expression: expression},
+        subject
+      ) do
+    {_path, subject_value} = path_and_value(identifier, subject)
+
+    cond do
+      is_nil(subject_value) -> false
+      is_list(subject_value) -> not Enum.member?(subject_value, expression)
+      true -> false
+    end
   end
 
   # TODO: Add support for additional operators:
@@ -326,7 +374,17 @@ defmodule Predicated do
   """
   def path_and_value(identifier, subject) do
     path = String.split(identifier, ".") |> Enum.map(&String.to_atom/1)
-    {path, get_in(subject, path)}
+
+    value =
+      Enum.reduce_while(path, subject, fn key, acc ->
+        cond do
+          is_map(acc) -> {:cont, Map.get(acc, key)}
+          is_list(acc) and Keyword.keyword?(acc) -> {:cont, Keyword.get(acc, key)}
+          true -> {:halt, nil}
+        end
+      end)
+
+    {path, value}
   end
 
   def date?(%Date{} = _date), do: true
@@ -335,6 +393,19 @@ defmodule Predicated do
   def datetime?(%DateTime{} = _datetime), do: true
   def datetime?(%NaiveDateTime{} = _datetime), do: true
   def datetime?(_), do: false
+
+  defp compare_datetimes(subject_value, expression) do
+    cond do
+      is_nil(subject_value) -> :lt
+      match?(%DateTime{}, subject_value) -> DateTime.compare(subject_value, expression)
+      match?(%NaiveDateTime{}, subject_value) ->
+        case DateTime.from_naive(subject_value, "Etc/UTC") do
+          {:ok, dt} -> DateTime.compare(dt, expression)
+          _ -> :lt
+        end
+      true -> :lt
+    end
+  end
 
   @doc """
   Converts a list of predicate structs back into a query string.
@@ -351,16 +422,16 @@ defmodule Predicated do
   ## Examples
 
       iex> predicates = [
-      ...>   %Predicate{
-      ...>     condition: %Condition{
+      ...>   %Predicated.Predicate{
+      ...>     condition: %Predicated.Condition{
       ...>       identifier: "name",
       ...>       comparison_operator: "==",
       ...>       expression: "John"
       ...>     },
       ...>     logical_operator: :and
       ...>   },
-      ...>   %Predicate{
-      ...>     condition: %Condition{
+      ...>   %Predicated.Predicate{
+      ...>     condition: %Predicated.Condition{
       ...>       identifier: "age",
       ...>       comparison_operator: ">",
       ...>       expression: 21
