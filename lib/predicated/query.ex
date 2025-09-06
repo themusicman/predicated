@@ -82,7 +82,6 @@ defmodule Predicated.Query do
           results
           |> chunk_results()
           |> compile_results([])
-          |> Enum.reverse()
 
         case validate_results(results) do
           :ok -> {:ok, results}
@@ -115,13 +114,14 @@ defmodule Predicated.Query do
   end
 
   def compile_results([], acc) do
-    acc
+    # Return reversed acc since we build it backwards for efficiency
+    Enum.reverse(acc)
   end
 
   def compile_results([result | results], acc) do
     group = Keyword.get(result, :grouping, nil)
 
-    acc =
+    new_predicate =
       if group do
         result |> Keyword.to_list()
 
@@ -130,31 +130,24 @@ defmodule Predicated.Query do
         predicates =
           group
           |> chunk_results()
-          |> compile_results([])
-          |> Enum.reverse()
+          |> compile_results([])  # This will return properly ordered results
 
-        [
-          %Predicate{
-            predicates: predicates,
-            logical_operator: get_logical_operator([nil, nil, nil, logical_operator])
-          }
-          | acc
-        ]
+        %Predicate{
+          predicates: predicates,
+          logical_operator: get_logical_operator([nil, nil, nil, logical_operator])
+        }
       else
-        [
-          %Predicate{
-            condition: %Condition{
-              identifier: Keyword.get(result, :identifier),
-              comparison_operator: normalize_comparison_operator(Keyword.get(result, :comparison_operator)),
-              expression: get_expression(result)
-            },
-            logical_operator: get_logical_operator(result)
-          }
-          | acc
-        ]
+        %Predicate{
+          condition: %Condition{
+            identifier: Keyword.get(result, :identifier),
+            comparison_operator: normalize_comparison_operator(Keyword.get(result, :comparison_operator)),
+            expression: get_expression(result)
+          },
+          logical_operator: get_logical_operator(result)
+        }
       end
 
-    compile_results(results, acc)
+    compile_results(results, [new_predicate | acc])
   end
 
   # TODO refactor

@@ -57,9 +57,8 @@ defmodule Predicated do
       {:ok, predicates} ->
         test(predicates, subject, acc)
 
-      error ->
-        IO.inspect(error: error)
-        Logger.error("Could not parse the query")
+      {:error, reason} ->
+        Logger.error("Could not parse the query: #{inspect(reason)}")
         false
     end
   end
@@ -113,6 +112,7 @@ defmodule Predicated do
 
   # This handles the case when we have tested all predicates and we need to compile the final result
   def test([], _subject, acc) do
+    # acc is built in reverse order, so reverse it for compile
     compile(Enum.reverse(acc), nil, true)
   end
 
@@ -373,18 +373,39 @@ defmodule Predicated do
       {[:user, :settings, :theme], "dark"}
   """
   def path_and_value(identifier, subject) do
-    path = String.split(identifier, ".") |> Enum.map(&String.to_atom/1)
-
-    value =
-      Enum.reduce_while(path, subject, fn key, acc ->
+    path_keys = String.split(identifier, ".")
+    
+    {path, value} =
+      Enum.reduce_while(path_keys, {[], subject}, fn key_string, {path_acc, acc} ->
+        # Only try to convert to existing atoms to prevent atom exhaustion
+        # Never create new atoms from user input
+        key = try do
+          String.to_existing_atom(key_string)
+        rescue
+          ArgumentError -> key_string
+        end
+        
+        new_path = [key | path_acc]
+        
         cond do
-          is_map(acc) -> {:cont, Map.get(acc, key)}
-          is_list(acc) and Keyword.keyword?(acc) -> {:cont, Keyword.get(acc, key)}
-          true -> {:halt, nil}
+          is_map(acc) -> 
+            # Use exact key match only, no fallback conversions for security
+            {:cont, {new_path, Map.get(acc, key)}}
+            
+          is_list(acc) and Keyword.keyword?(acc) -> 
+            # Keywords expect atom keys - only use if we successfully converted to existing atom
+            if is_atom(key) do
+              {:cont, {new_path, Keyword.get(acc, key)}}
+            else
+              {:halt, {new_path, nil}}
+            end
+            
+          true -> 
+            {:halt, {new_path, nil}}
         end
       end)
 
-    {path, value}
+    {Enum.reverse(path), value}
   end
 
   def date?(%Date{} = _date), do: true

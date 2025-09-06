@@ -57,7 +57,7 @@ defmodule Predicated.Query.Parser do
     |> optional(utf8_string([?a..?z, ?A..?Z, ?0..?9, ?_], min: 0))
     |> reduce({Enum, :join, [""]})
 
-  indentifier =
+  identifier =
     identifier_segment
     |> repeat(ignore(string(".")) |> concat(identifier_segment))
     |> reduce({Enum, :join, ["."]})
@@ -144,7 +144,7 @@ defmodule Predicated.Query.Parser do
 
   comparison =
     ignore(optional(whitespace))
-    |> concat(indentifier)
+    |> concat(identifier)
     |> concat(comparison_operator)
     |> concat(expression)
     |> ignore(optional(whitespace))
