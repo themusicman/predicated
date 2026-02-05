@@ -42,7 +42,7 @@ defmodule Predicated.Query.ParserEdgeCasesTest do
     test "handles strings with escaped quotes" do
       # Single quotes within single-quoted strings need escaping
       assert {:error, _} = Query.new("name == 'John's'")
-      
+
       # Test with properly escaped quotes if supported
       # This might need adjustment based on the parser's escaping rules
     end
@@ -55,7 +55,7 @@ defmodule Predicated.Query.ParserEdgeCasesTest do
     test "handles strings with newlines and tabs" do
       {:ok, predicates} = Query.new("description == 'Line 1\\nLine 2'")
       assert [%{condition: %{expression: "Line 1\\nLine 2"}}] = predicates
-      
+
       {:ok, predicates} = Query.new("description == 'Column1\\tColumn2'")
       assert [%{condition: %{expression: "Column1\\tColumn2"}}] = predicates
     end
@@ -107,6 +107,7 @@ defmodule Predicated.Query.ParserEdgeCasesTest do
       AND
       profile_id == '456'
       """
+
       {:ok, predicates} = Query.new(query)
       assert length(predicates) == 2
     end
@@ -137,7 +138,7 @@ defmodule Predicated.Query.ParserEdgeCasesTest do
       # since numbers can't be part of identifiers
       assert {:ok, predicates} = Query.new("a==1andb==2")
       assert length(predicates) == 2
-      
+
       assert {:ok, predicates} = Query.new("a==1orb==2")
       assert length(predicates) == 2
     end
@@ -204,13 +205,13 @@ defmodule Predicated.Query.ParserEdgeCasesTest do
     end
 
     test "handles very long strings" do
-      long_string = String.duplicate("x", 10000)
+      long_string = String.duplicate("x", 10_000)
       {:ok, predicates} = Query.new("data == '#{long_string}'")
       assert [%{condition: %{expression: ^long_string}}] = predicates
     end
 
     test "handles deeply nested dot notation" do
-      deep_path = Enum.join(1..50 |> Enum.map(&"level#{&1}"), ".")
+      deep_path = Enum.map_join(1..50, ".", &"level#{&1}")
       {:ok, predicates} = Query.new("#{deep_path} == 'value'")
       assert [%{condition: %{identifier: ^deep_path}}] = predicates
     end
@@ -245,7 +246,9 @@ defmodule Predicated.Query.ParserEdgeCasesTest do
     test "handles extreme numeric values" do
       # Very large integers
       {:ok, predicates} = Query.new("value == 999999999999999999999")
-      assert [%{condition: %{expression: 999999999999999999999}}] = predicates
+
+      assert [%{condition: %{expression: 999_999_999_999_999_999_999}}] =
+               predicates
 
       # Very small floats
       {:ok, predicates} = Query.new("value == 0.000000000001")

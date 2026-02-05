@@ -6,12 +6,12 @@ defmodule Predicated.DataTypeEdgeCasesTest do
     test "comparing nil values" do
       # nil == nil should be true
       assert Predicated.test("value == nil", %{value: nil})
-      
+
       # nil != non-nil should be true
       assert Predicated.test("value != 'test'", %{value: nil})
       assert Predicated.test("value != 123", %{value: nil})
       assert Predicated.test("value != true", %{value: nil})
-      
+
       # non-nil != nil should be true
       refute Predicated.test("value == nil", %{value: "test"})
       refute Predicated.test("value == nil", %{value: 0})
@@ -91,7 +91,7 @@ defmodule Predicated.DataTypeEdgeCasesTest do
       # Test leap year
       {:ok, predicates} = Predicated.Query.new("date == '2024-02-29'::DATE")
       assert Predicated.test(predicates, %{date: ~D[2024-02-29]})
-      
+
       # Non-leap year should fail
       assert {:error, _} = Predicated.Query.new("date == '2023-02-29'::DATE")
     end
@@ -100,11 +100,11 @@ defmodule Predicated.DataTypeEdgeCasesTest do
       {:ok, dt1, _} = DateTime.from_iso8601("2023-01-01T12:00:00Z")
       {:ok, dt2, _} = DateTime.from_iso8601("2023-01-01T12:00:00+00:00")
       {:ok, dt3, _} = DateTime.from_iso8601("2023-01-01T08:00:00-04:00")
-      
+
       # Same instant in time
       assert DateTime.compare(dt1, dt2) == :eq
       assert DateTime.compare(dt1, dt3) == :eq
-      
+
       assert Predicated.test("time == '2023-01-01T12:00:00Z'::DATETIME", %{time: dt1})
       assert Predicated.test("time == '2023-01-01T12:00:00Z'::DATETIME", %{time: dt2})
       assert Predicated.test("time == '2023-01-01T12:00:00Z'::DATETIME", %{time: dt3})
@@ -113,10 +113,12 @@ defmodule Predicated.DataTypeEdgeCasesTest do
     test "comparing DateTime to NaiveDateTime" do
       {:ok, _datetime, _} = DateTime.from_iso8601("2023-01-01T12:00:00Z")
       naive_datetime = ~N[2023-01-01 12:00:00]
-      
+
       # These are different types and may not compare as expected
       # Testing actual behavior
-      result = Predicated.test("time == '2023-01-01T12:00:00Z'::DATETIME", %{time: naive_datetime})
+      result =
+        Predicated.test("time == '2023-01-01T12:00:00Z'::DATETIME", %{time: naive_datetime})
+
       # Document the actual behavior - this might be false due to type mismatch
       assert result == false || result == true
     end
@@ -126,19 +128,19 @@ defmodule Predicated.DataTypeEdgeCasesTest do
     test "float precision issues" do
       # Classic floating point precision problem
       value = 0.1 + 0.2
-      
+
       # This might fail due to float precision
       result = Predicated.test("value == 0.3", %{value: value})
-      
+
       # Document actual behavior - in Elixir this usually works due to representation
       assert result == true || result == false
-      
+
       # Range check is more reliable
       assert Predicated.test("value > 0.29 AND value < 0.31", %{value: value})
     end
 
     test "very large numbers" do
-      large_int = 99999999999999999999999999999999
+      large_int = 99_999_999_999_999_999_999_999_999_999_999
       assert Predicated.test("value == 99999999999999999999999999999999", %{value: large_int})
       assert Predicated.test("value > 99999999999999999999999999999998", %{value: large_int})
     end
@@ -155,7 +157,7 @@ defmodule Predicated.DataTypeEdgeCasesTest do
       # with very large numbers
       huge = 1.0e308
       assert Predicated.test("value > 1.0e307", %{value: huge})
-      
+
       # Test negative numbers
       assert Predicated.test("value < 0", %{value: -1.0e308})
     end
@@ -165,7 +167,7 @@ defmodule Predicated.DataTypeEdgeCasesTest do
       assert Predicated.test("value == 0.0", %{value: 0})
       assert Predicated.test("value == 0", %{value: 0.0})
       assert Predicated.test("value == 0.0", %{value: 0.0})
-      
+
       # Negative zero
       assert Predicated.test("value == -0", %{value: 0})
       assert Predicated.test("value == -0.0", %{value: 0.0})
@@ -184,7 +186,7 @@ defmodule Predicated.DataTypeEdgeCasesTest do
       assert Predicated.test("value == '  '", %{value: "  "})
       assert Predicated.test("value == '\t'", %{value: "\t"})
       assert Predicated.test("value == '\n'", %{value: "\n"})
-      
+
       # Leading/trailing whitespace
       refute Predicated.test("value == 'test'", %{value: " test"})
       refute Predicated.test("value == 'test'", %{value: "test "})
@@ -200,11 +202,11 @@ defmodule Predicated.DataTypeEdgeCasesTest do
     test "unicode strings" do
       # Different representations of é
       assert Predicated.test("value == 'café'", %{value: "café"})
-      
+
       # Emoji comparison
       assert Predicated.test("value == '👍'", %{value: "👍"})
       assert Predicated.test("value == '🎉🎊'", %{value: "🎉🎊"})
-      
+
       # Multi-byte characters
       assert Predicated.test("value == '你好'", %{value: "你好"})
       assert Predicated.test("value == 'مرحبا'", %{value: "مرحبا"})
@@ -226,7 +228,7 @@ defmodule Predicated.DataTypeEdgeCasesTest do
       # Booleans with comparison operators (might not make semantic sense but should handle gracefully)
       assert Predicated.test("value != false", %{value: true})
       assert Predicated.test("value != true", %{value: false})
-      
+
       # These might have undefined behavior but shouldn't crash
       result = Predicated.test("value > false", %{value: true})
       assert result == true || result == false
@@ -238,7 +240,7 @@ defmodule Predicated.DataTypeEdgeCasesTest do
       assert Predicated.test("user.name == nil", %{user: %{name: nil}})
       assert Predicated.test("user.name == nil", %{user: %{}})
       assert Predicated.test("user.name == nil", %{})
-      
+
       refute Predicated.test("user.name == 'test'", %{user: %{name: nil}})
       refute Predicated.test("user.name == 'test'", %{user: %{}})
       refute Predicated.test("user.name == 'test'", %{})
@@ -248,7 +250,7 @@ defmodule Predicated.DataTypeEdgeCasesTest do
       # This might not be supported, but test the behavior
       result = Predicated.test("user == nil", %{user: %{name: "test"}})
       assert result == false
-      
+
       assert Predicated.test("user != nil", %{user: %{name: "test"}})
       assert Predicated.test("user == nil", %{})
     end

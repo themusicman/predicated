@@ -107,7 +107,7 @@ defmodule Predicated.IntegrationTest do
           metadata: %{
             endpoint: "/users",
             status_code: 504,
-            duration_ms: 30000,
+            duration_ms: 30_000,
             user_id: "123"
           }
         },
@@ -155,13 +155,13 @@ defmodule Predicated.IntegrationTest do
         %{
           applicant: %{
             age: 35,
-            income: 75000,
+            income: 75_000,
             credit_score: 720,
             employment_months: 36,
             existing_loans: 1
           },
           loan: %{
-            amount: 200000,
+            amount: 200_000,
             term_years: 30,
             purpose: "home"
           }
@@ -169,13 +169,13 @@ defmodule Predicated.IntegrationTest do
         %{
           applicant: %{
             age: 25,
-            income: 45000,
+            income: 45_000,
             credit_score: 650,
             employment_months: 12,
             existing_loans: 2
           },
           loan: %{
-            amount: 20000,
+            amount: 20_000,
             term_years: 5,
             purpose: "auto"
           }
@@ -183,13 +183,13 @@ defmodule Predicated.IntegrationTest do
         %{
           applicant: %{
             age: 45,
-            income: 120000,
+            income: 120_000,
             credit_score: 800,
             employment_months: 120,
             existing_loans: 0
           },
           loan: %{
-            amount: 50000,
+            amount: 50_000,
             term_years: 10,
             purpose: "business"
           }
@@ -213,7 +213,7 @@ defmodule Predicated.IntegrationTest do
 
       approved = Enum.filter(applications, &Predicated.test(approval_query, &1))
       assert length(approved) == 2
-      
+
       # Verify the business loan was approved due to high credit score
       business_loan = Enum.find(approved, &(&1.loan.purpose == "business"))
       assert business_loan.applicant.credit_score >= 750
@@ -247,8 +247,8 @@ defmodule Predicated.IntegrationTest do
           id: 3,
           plan: "enterprise",
           usage: %{
-            api_calls: 50000,
-            storage_mb: 10240,
+            api_calls: 50_000,
+            storage_mb: 10_240,
             team_members: 50
           },
           created_at: ~D[2022-01-01],
@@ -364,15 +364,16 @@ defmodule Predicated.IntegrationTest do
   describe "performance with large datasets" do
     test "filtering large user list" do
       # Generate 10,000 users
-      users = for i <- 1..10_000 do
-        %{
-          id: i,
-          age: :rand.uniform(80) + 10,
-          status: Enum.random(["active", "inactive", "pending"]),
-          score: :rand.uniform(100),
-          tags: Enum.take_random(["vip", "new", "verified", "premium"], :rand.uniform(3))
-        }
-      end
+      users =
+        for i <- 1..10_000 do
+          %{
+            id: i,
+            age: :rand.uniform(80) + 10,
+            status: Enum.random(["active", "inactive", "pending"]),
+            score: :rand.uniform(100),
+            tags: Enum.take_random(["vip", "new", "verified", "premium"], :rand.uniform(3))
+          }
+        end
 
       query = """
         status == 'active' AND
@@ -382,20 +383,21 @@ defmodule Predicated.IntegrationTest do
       """
 
       # Should complete reasonably fast
-      {time, results} = :timer.tc(fn ->
-        Enum.filter(users, &Predicated.test(query, &1))
-      end)
+      {time, results} =
+        :timer.tc(fn ->
+          Enum.filter(users, &Predicated.test(query, &1))
+        end)
 
       # Should complete in under 500ms for 10k items
       assert time < 500_000
-      assert length(results) > 0
+      assert results != []
     end
   end
 
   describe "error handling and edge cases" do
     test "graceful handling of missing fields" do
       incomplete_data = %{
-        name: "John",
+        name: "John"
         # age is missing
         # status is missing
       }
@@ -404,7 +406,7 @@ defmodule Predicated.IntegrationTest do
       assert Predicated.test("age == nil", incomplete_data)
       assert Predicated.test("status == nil", incomplete_data)
       assert Predicated.test("name != nil", incomplete_data)
-      
+
       # Comparisons with missing fields
       refute Predicated.test("age > 18", incomplete_data)
       refute Predicated.test("status == 'active'", incomplete_data)
