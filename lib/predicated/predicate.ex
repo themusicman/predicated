@@ -5,7 +5,7 @@ defmodule Predicated.Predicate do
   A predicate can contain either:
   - A single condition to evaluate
   - A group of nested predicates (for grouped expressions)
-  
+
   Each predicate has an optional logical operator that determines how it
   combines with the next predicate in a list.
 
@@ -49,7 +49,13 @@ defmodule Predicated.Predicate do
         logical_operator: :and
       }
   """
-  
+
+  @type t :: %__MODULE__{
+          condition: Predicated.Condition.t() | nil,
+          logical_operator: :and | :or | nil,
+          predicates: [t()]
+        }
+
   defstruct condition: nil, logical_operator: nil, predicates: []
 
   @doc """
@@ -77,7 +83,8 @@ defmodule Predicated.Predicate do
       iex> Predicated.Predicate.to_query(predicate)
       "age > 21 AND"
   """
-  def to_query(%{predicates: predicates} = predicate) when length(predicates) > 0 do
+  @spec to_query(t()) :: String.t()
+  def to_query(%{predicates: [_ | _] = predicates} = predicate) do
     grouping =
       Enum.reduce(predicates, [], fn predicate, acc ->
         [to_query(predicate), acc]
@@ -106,10 +113,18 @@ defmodule Predicated.Predicate do
     ""
   end
 
+  @doc """
+  Appends a closing parenthesis to a list of query parts.
+  """
+  @spec append_closing_paran([String.t()]) :: [String.t()]
   def append_closing_paran(parts) do
     parts ++ [")"]
   end
 
+  @doc """
+  Appends the string form of a logical operator to query parts.
+  """
+  @spec append_logical_operator([String.t()], :and | :or | nil) :: [String.t()]
   def append_logical_operator(parts, logical_operator) do
     if logical_operator do
       parts ++ [get_logical_operator(logical_operator)]
@@ -118,9 +133,17 @@ defmodule Predicated.Predicate do
     end
   end
 
+  @doc """
+  Returns the string representation of a logical operator atom.
+  """
+  @spec get_logical_operator(:and | :or) :: String.t()
   def get_logical_operator(:and), do: "AND"
   def get_logical_operator(:or), do: "OR"
 
+  @doc """
+  Formats an expression value for inclusion in a query string.
+  """
+  @spec get_expression_value(any()) :: String.t() | number() | boolean()
   def get_expression_value(expression)
       when is_integer(expression) or is_float(expression) or is_boolean(expression) do
     expression

@@ -50,6 +50,12 @@ defmodule Predicated.Condition do
         expression: ~D[2023-01-01]
       }
   """
-  
+
+  @type t :: %__MODULE__{
+          identifier: String.t() | nil,
+          comparison_operator: String.t() | nil,
+          expression: any()
+        }
+
   defstruct identifier: nil, comparison_operator: nil, expression: nil
 end

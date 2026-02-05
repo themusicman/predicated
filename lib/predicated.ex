@@ -4,7 +4,7 @@ defmodule Predicated do
 
   It provides a flexible way to test complex conditions using either struct-based predicates
   or query strings with support for:
-  
+
   - Logical operators (AND, OR)
   - Comparison operators (==, !=, >, >=, <, <=, contains, in)
   - Nested/grouped predicates
@@ -45,11 +45,12 @@ defmodule Predicated do
       })
       #=> true
   """
-  
+
   require Logger
   alias Predicated.Query
   alias Predicated.Predicate
 
+  @spec test(String.t() | [Predicate.t()], map(), list()) :: boolean()
   def test(predicates, subject, acc \\ [])
 
   def test(query, subject, acc) when is_binary(query) do
@@ -92,8 +93,7 @@ defmodule Predicated do
   """
   # This handles the case when there are group predicates.
   # ex. (b == 1 || b == 2) && c == 3
-  def test([%{condition: nil, predicates: predicates} = predicate | rest], subject, acc)
-      when length(predicates) > 0 do
+  def test([%{condition: nil, predicates: [_ | _] = predicates} = predicate | rest], subject, acc) do
     result = {predicate.logical_operator, test(predicates, subject, []), nil}
     test(rest, subject, [result | acc])
   end
@@ -101,11 +101,11 @@ defmodule Predicated do
   # This handles the case when there are non-grouped predicates.
   # ex. b == 1 || b == 2 && c == 3
   def test(
-        [%{condition: condition, predicates: predicates} = predicate | rest],
+        [%{condition: condition, predicates: []} = predicate | rest],
         subject,
         acc
       )
-      when not is_nil(condition) and length(predicates) == 0 do
+      when not is_nil(condition) do
     result = {predicate.logical_operator, eval(predicate.condition, subject), nil}
     test(rest, subject, [result | acc])
   end
@@ -134,6 +134,7 @@ defmodule Predicated do
   # first result to be compiled
   # New compilation that enforces AND precedence over OR.
   # Each tuple is {operator_to_next, bool, _} per current structure.
+  @spec compile(list(), any(), any()) :: boolean()
   def compile(results, _previous, _acc) do
     {groups, _current_and} =
       Enum.reduce(results, {[], true}, fn {op, bool, _}, {acc_groups, acc_and} ->
@@ -180,6 +181,7 @@ defmodule Predicated do
   ## Returns
     Boolean result of the comparison, or nil if operator not supported
   """
+  @spec eval(Predicated.Condition.t() | map(), map()) :: boolean() | nil
   def eval(%{identifier: identifier, comparison_operator: "==", expression: expression}, subject) do
     {_path, subject_value} = path_and_value(identifier, subject)
 
@@ -372,59 +374,73 @@ defmodule Predicated do
       iex> Predicated.path_and_value("user.settings.theme", %{user: %{settings: %{theme: "dark"}}})
       {[:user, :settings, :theme], "dark"}
   """
+  @spec path_and_value(String.t(), map() | keyword()) :: {list(), any()}
   def path_and_value(identifier, subject) do
     path_keys = String.split(identifier, ".")
-    
+
     {path, value} =
       Enum.reduce_while(path_keys, {[], subject}, fn key_string, {path_acc, acc} ->
-        # Only try to convert to existing atoms to prevent atom exhaustion
-        # Never create new atoms from user input
-        key = try do
-          String.to_existing_atom(key_string)
-        rescue
-          ArgumentError -> key_string
-        end
-        
+        key = safe_to_existing_atom(key_string)
         new_path = [key | path_acc]
-        
-        cond do
-          is_map(acc) -> 
-            # Use exact key match only, no fallback conversions for security
-            {:cont, {new_path, Map.get(acc, key)}}
-            
-          is_list(acc) and Keyword.keyword?(acc) -> 
-            # Keywords expect atom keys - only use if we successfully converted to existing atom
-            if is_atom(key) do
-              {:cont, {new_path, Keyword.get(acc, key)}}
-            else
-              {:halt, {new_path, nil}}
-            end
-            
-          true -> 
-            {:halt, {new_path, nil}}
-        end
+        step_into(acc, key, new_path)
       end)
 
     {Enum.reverse(path), value}
   end
 
+  # Only try to convert to existing atoms to prevent atom exhaustion.
+  # Never create new atoms from user input.
+  defp safe_to_existing_atom(key_string) do
+    String.to_existing_atom(key_string)
+  rescue
+    ArgumentError -> key_string
+  end
+
+  defp step_into(acc, key, path) when is_map(acc) do
+    {:cont, {path, Map.get(acc, key)}}
+  end
+
+  defp step_into(acc, key, path) when is_list(acc) and is_atom(key) do
+    if Keyword.keyword?(acc) do
+      {:cont, {path, Keyword.get(acc, key)}}
+    else
+      {:halt, {path, nil}}
+    end
+  end
+
+  defp step_into(_acc, _key, path), do: {:halt, {path, nil}}
+
+  @doc """
+  Returns true if the value is a Date struct.
+  """
+  @spec date?(any()) :: boolean()
   def date?(%Date{} = _date), do: true
   def date?(_), do: false
 
+  @doc """
+  Returns true if the value is a DateTime or NaiveDateTime struct.
+  """
+  @spec datetime?(any()) :: boolean()
   def datetime?(%DateTime{} = _datetime), do: true
   def datetime?(%NaiveDateTime{} = _datetime), do: true
   def datetime?(_), do: false
 
   defp compare_datetimes(subject_value, expression) do
     cond do
-      is_nil(subject_value) -> :lt
-      match?(%DateTime{}, subject_value) -> DateTime.compare(subject_value, expression)
+      is_nil(subject_value) ->
+        :lt
+
+      match?(%DateTime{}, subject_value) ->
+        DateTime.compare(subject_value, expression)
+
       match?(%NaiveDateTime{}, subject_value) ->
         case DateTime.from_naive(subject_value, "Etc/UTC") do
           {:ok, dt} -> DateTime.compare(dt, expression)
           _ -> :lt
         end
-      true -> :lt
+
+      true ->
+        :lt
     end
   end
 
@@ -462,6 +478,7 @@ defmodule Predicated do
       iex> Predicated.to_query(predicates)
       "name == 'John' AND age > 21"
   """
+  @spec to_query([Predicate.t()]) :: String.t()
   def to_query(predicates) do
     Enum.reduce(predicates, [], fn predicate, acc ->
       [Predicate.to_query(predicate), acc]

@@ -42,7 +42,7 @@ defmodule Predicated.Query.Parser do
   Note: This module is primarily used internally by `Predicated.Query.new/1`.
   Direct usage is not recommended unless you need low-level parsing control.
   """
-  
+
   import NimbleParsec
 
   lparen = ascii_char([?(]) |> label("(")
@@ -114,13 +114,22 @@ defmodule Predicated.Query.Parser do
   list_expression =
     ignore(optional(whitespace))
     |> string("[")
-    |> utf8_string([?a..?z, ?A..?Z, ?0..?9, ?_, ?=, ?>, ?<, ?\s, ?-, ?:, ?., ?\,, ?'], min: 0)
+    |> utf8_string(
+      [?a..?z, ?A..?Z, ?0..?9, ?_, ?=, ?>, ?<, ?\s, ?-, ?:, ?., 44, ?'],
+      min: 0
+    )
     |> string("]")
     |> reduce({Enum, :join, [""]})
     |> unwrap_and_tag(:list_expression)
 
   expression =
-    choice([list_expression, boolean_expression, nil_expression, string_expression, number_expression])
+    choice([
+      list_expression,
+      boolean_expression,
+      nil_expression,
+      string_expression,
+      number_expression
+    ])
 
   comparison_operator =
     ignore(optional(whitespace))
