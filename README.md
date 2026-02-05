@@ -1,13 +1,13 @@
 # Predicated
 
 [![Elixir CI](https://github.com/themusicman/predicated/actions/workflows/elixir.yml/badge.svg)](https://github.com/themusicman/predicated/actions/workflows/elixir.yml)
+[![Hex.pm](https://img.shields.io/hexpm/v/predicated.svg)](https://hex.pm/packages/predicated)
 
-Predicated is a library that allows for building predicates to query an in-memory data structure in Elixir.
+A library for building and evaluating predicates against in-memory data structures in Elixir. Define conditions using query strings or structs, then test them against maps and structs with full support for nested fields, boolean logic, and type-safe comparisons.
 
 ## Installation
 
-If [available in Hex](https://hex.pm/packages/predicated), the package can be installed
-by adding `predicated` to your list of dependencies in `mix.exs`:
+Add `predicated` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
@@ -17,473 +17,625 @@ def deps do
 end
 ```
 
-## Examples
-
-Using Structs.
+## Quick Start
 
 ```elixir
-predicates = [
-    %Predicate{
-      condition: %Condition{
-        identifier: "last_name",
-        comparison_operator: "==",
-        expression: "Armstrong"
-      },
-      logical_operator: :and
-    },
-    %Predicate{
-      predicates: [
-        %Predicate{
-          condition: %Condition{
-            identifier: "first_name",
-            comparison_operator: "==",
-            expression: "Joe"
-          },
-          logical_operator: :or
-        },
-        %Predicate{
-          predicates: [
-            %Predicate{
-              condition: %Condition{
-                identifier: "first_name",
-                comparison_operator: "==",
-                expression: "Jill"
-              },
-              logical_operator: :and
-            },
-            %Predicate{
-              condition: %Condition{
-                identifier: "first_name",
-                comparison_operator: "==",
-                expression: "Joe"
-              }
-            }
-          ]
-        }
-      ],
-      logical_operator: :and
-    },
-    %Predicate{
-      condition: %Condition{
-        identifier: "last_name",
-        comparison_operator: "==",
-        expression: "Beaver"
-      }
-    }
-]
-
-# true && (true || (false && true)) && false
-assert Predicated.test(predicates, %{first_name: "Joe", last_name: "Armstrong"}) == false
-```
-
-The example above could also be written with just plain maps or embedded schema as long as the data shape is the same. 
-
-For example
-
-```elixir
-%Predicate{
-  condition: %Condition{
-    identifier: "last_name",
-    comparison_operator: "==",
-    expression: "Beaver"
-  }
-}
-```
-
-converted to a map would be
-
-```elixir
-%{
-  condition: %{
-    identifier: "last_name",
-    comparison_operator: "==",
-    expression: "Beaver"
-  }
-}
-```
-
-Using a query string:
-
-```elixir
-assert Predicated.test("trace_id != 'test123' and profile_id == '123'", %{
-  trace_id: "test123",
-  profile_id: "123"
-}) == false
-
-```
-
-Support for grouped and nested predicates:
-
-```elixir
-assert Predicated.test("organization_id == '123' AND (user_id == '123' OR user_id == '456' OR (user_type == 'admin' OR user_type == 'editor'))", %{
-  organization_id: "123",
-  user_id: "767",
-  user_type: "admin"
-}) == true
-
-```
-
-Support for boolean and integers:
-
-```elixir
-assert Predicated.test("verified == TRUE AND post.count > 100", %{
-  verified: true,
-  post: %{ count: 123 }
-}) == true
-
-```
-
-Support for dates and datetimes:
-
-```elixir
-assert Predicated.test("dob >= '2020-01-01'::DATE", %{
-  dob: ~D[2023-02-11]
-}) == true
-```
-
-```elixir
-assert Predicated.test("inserted_at >= '2020-01-01T01:50:07Z'::DATETIME", %{
-  inserted_at: ~U[2020-01-01 10:00:00Z] 
-}) == true
-```
-
-## Ecto Integration
-
-Integrating with Ecto it a bit of a manual process at the moment. My hopes are to write some macros that make this less tedious. 
-
-The first snippet here constructs a query and then applies the predicates to the query. See the next snippet for how to apply the predicates to the Ecto query.
-
-```elixir
-def list_events_for_topic(
-        offset: offset,
-        batch_size: batch_size,
-        topic_name: topic_name,
-        topic_identifier: topic_identifier,
-        predicates: predicates
-      ) do
-  query =
-    from_events_for_topic(topic_name: topic_name)
-    |> where(as(:events).topic_name == ^topic_name)
-    |> apply_ordering(predicates)
-    |> where(not is_nil(as(:events).occurred_at))
-    |> where_available()
-
-  query =
-    unless ER.empty?(topic_identifier) do
-      where(query, as(:events).topic_identifier == ^topic_identifier)
-    else
-      query
-    end
-
-  query =
-    if Flamel.present?(predicates) do
-      conditions = apply_predicates(predicates, nil, nil)
-      from query, where: ^conditions
-    else
-      query
-    end
-
-  ER.BatchedResults.new(query, %{"offset" => offset, "batch_size" => batch_size})
-end
-```
-
-Below is a snippet from a [module](https://github.com/eventrelay/eventrelay/blob/main/lib/event_relay/events/predicates.ex) that takes in predicates and applies them to an Ecto query.
-
-```elixir
-
- def apply_predicates([predicate | predicates], nil, nil) do
-    # first iteration
-    conditions = apply_predicate(predicate, dynamic(true), nil)
-    apply_predicates(predicates, conditions, predicate)
-  end
-
-  def apply_predicates([predicate | predicates], conditions, previous_predicate) do
-    conditions = apply_predicate(predicate, conditions, previous_predicate)
-    apply_predicates(predicates, conditions, predicate)
-  end
-
-  def apply_predicates([], conditions, _previous_predicate) do
-    conditions
-  end
-
-  def apply_predicate(%{predicates: predicates}, conditions, previous_predicate)
-      when length(predicates) > 0 do
-    nested_conditions = apply_predicates(predicates, dynamic(true), previous_predicate)
-
-    case previous_predicate do
-      nil ->
-        dynamic([events: events], ^conditions and ^nested_conditions)
-
-      %{logical_operator: :and} ->
-        dynamic([events: events], ^conditions and ^nested_conditions)
-
-      %{logical_operator: :or} ->
-        dynamic([events: events], ^conditions or ^nested_conditions)
-    end
-  end
-
-  def apply_predicate(
-        %{
-          condition: %{identifier: "data." <> path, comparison_operator: "==", expression: value}
-        },
-        conditions,
-        previous_predicate
-      ) do
-    path = parse_path(path)
-
-    case previous_predicate do
-      nil ->
-        dynamic([events: events], ^conditions and json_extract_path(events.data, ^path) == ^value)
-
-      %{logical_operator: :and} ->
-        dynamic([events: events], ^conditions and json_extract_path(events.data, ^path) == ^value)
-
-      %{logical_operator: :or} ->
-        dynamic([events: events], ^conditions or json_extract_path(events.data, ^path) == ^value)
-
-      _ ->
-        conditions
-    end
-  end
-
-  def apply_predicate(
-        %{
-          condition: %{
-            identifier: "context." <> path,
-            comparison_operator: "==",
-            expression: value
-          }
-        },
-        conditions,
-        previous_predicate
-      ) do
-    path = parse_path(path)
-
-    case previous_predicate do
-      nil ->
-        dynamic(
-          [events: events],
-          ^conditions and json_extract_path(events.context, ^path) == ^value
-        )
-
-      %{logical_operator: :and} ->
-        dynamic(
-          [events: events],
-          ^conditions and json_extract_path(events.context, ^path) == ^value
-        )
-
-      %{logical_operator: :or} ->
-        dynamic(
-          [events: events],
-          ^conditions or json_extract_path(events.context, ^path) == ^value
-        )
-
-      _ ->
-        conditions
-    end
-  end
-
-  def apply_predicate(
-        %{
-          condition: %{identifier: field, comparison_operator: "==", expression: value}
-        },
-        conditions,
-        previous_predicate
-      ) do
-    field = String.to_atom(field)
-
-    case previous_predicate do
-      nil ->
-        dynamic([events: events], ^conditions and field(events, ^field) == ^value)
-
-      %{logical_operator: :and} ->
-        dynamic([events: events], ^conditions and field(events, ^field) == ^value)
-
-      %{logical_operator: :or} ->
-        dynamic([events: events], ^conditions or field(events, ^field) == ^value)
-
-      _ ->
-        conditions
-    end
-  end
-```
-
-
-## API Reference
-
-### Core Functions
-
-#### `Predicated.test/3`
-Tests predicates against a subject data structure.
-
-```elixir
-# With query string
+# Simple equality check
 Predicated.test("status == 'active'", %{status: "active"})
 #=> true
 
-# With predicate structs
-predicates = [%Predicate{condition: %Condition{...}}]
-Predicated.test(predicates, %{...})
+# Multiple conditions with AND
+Predicated.test("age >= 21 AND verified == true", %{age: 25, verified: true})
+#=> true
+
+# Nested field access with dot notation
+Predicated.test("user.role == 'admin'", %{user: %{role: "admin"}})
 #=> true
 ```
 
-#### `Predicated.Query.new/1`
-Parses a query string into predicate structs.
+## Query String Syntax
 
-```elixir
-{:ok, predicates} = Predicated.Query.new("age > 18 AND verified == true")
+Query strings are the primary way to define predicates. They follow the format:
+
+```
+identifier operator expression [logical_operator identifier operator expression ...]
 ```
 
-#### `Predicated.to_query/1`
-Converts predicate structs back to a query string.
+### Identifiers
+
+Identifiers reference fields in the subject data structure. Use dot notation for nested access:
 
 ```elixir
-query_string = Predicated.to_query(predicates)
-#=> "age > 18 AND verified == true"
+# Top-level field
+Predicated.test("name == 'Alice'", %{name: "Alice"})
+#=> true
+
+# Nested field
+Predicated.test("user.profile.email == 'alice@example.com'", %{
+  user: %{profile: %{email: "alice@example.com"}}
+})
+#=> true
+
+# Deeply nested
+Predicated.test("config.database.pool.size > 5", %{
+  config: %{database: %{pool: %{size: 10}}}
+})
+#=> true
 ```
 
-### Supported Operators
+### Comparison Operators
 
 | Operator | Description | Example |
 |----------|-------------|---------|
-| `==` | Equality | `status == 'active'` |
-| `!=` | Inequality | `status != 'deleted'` |
+| `==` | Equal to | `status == 'active'` |
+| `!=` | Not equal to | `status != 'deleted'` |
 | `>` | Greater than | `age > 18` |
 | `>=` | Greater than or equal | `score >= 75` |
 | `<` | Less than | `price < 100.00` |
 | `<=` | Less than or equal | `quantity <= 10` |
 | `contains` | List contains value | `tags contains 'featured'` |
-| `in` | Value in list | `status in ['active', 'pending']` |
+| `not contains` | List does not contain value | `tags not contains 'archived'` |
+| `in` | Value is in list | `status in ['active', 'pending']` |
 
-### Type Support
+### Logical Operators
 
-#### Strings
-```elixir
-Predicated.test("name == 'John Doe'", %{name: "John Doe"})
-```
-
-#### Numbers (Integer and Float)
-```elixir
-Predicated.test("age >= 21 AND score > 85.5", %{age: 25, score: 90.0})
-```
-
-#### Booleans
-```elixir
-Predicated.test("verified == true AND active == FALSE", %{verified: true, active: false})
-```
-
-#### Dates
-```elixir
-Predicated.test("birth_date < '2000-01-01'::DATE", %{birth_date: ~D[1995-05-15]})
-```
-
-#### DateTimes
-```elixir
-Predicated.test("created_at >= '2023-01-01T00:00:00Z'::DATETIME", %{
-  created_at: ~U[2023-06-15 10:30:00Z]
-})
-```
-
-#### Lists
-```elixir
-# Check if list contains value
-Predicated.test("tags contains 'elixir'", %{tags: ["elixir", "phoenix", "nerves"]})
-
-# Check if value is in list
-Predicated.test("role in ['admin', 'moderator']", %{role: "admin"})
-```
-
-### Nested Field Access
-
-Access nested fields using dot notation:
+Combine conditions with `AND` and `OR` (case-insensitive):
 
 ```elixir
-data = %{
-  user: %{
-    profile: %{
-      settings: %{
-        theme: "dark",
-        notifications: true
-      }
-    }
-  }
-}
+# AND - both conditions must be true
+Predicated.test("age >= 21 AND country == 'US'", %{age: 25, country: "US"})
+#=> true
 
-Predicated.test("user.profile.settings.theme == 'dark'", data)
+# OR - at least one condition must be true
+Predicated.test("role == 'admin' OR role == 'moderator'", %{role: "moderator"})
+#=> true
+
+# Case-insensitive operators
+Predicated.test("a == 1 and b == 2", %{a: 1, b: 2})
+#=> true
+
+Predicated.test("a == 1 or b == 2", %{a: 1, b: 99})
 #=> true
 ```
 
-### Complex Queries
+### Operator Precedence
 
-#### Combining Conditions
-```elixir
-# AND has higher precedence than OR
-Predicated.test("a == 1 OR b == 2 AND c == 3", %{a: 1, b: 5, c: 3})
-#=> true (evaluates as: a == 1 OR (b == 2 AND c == 3))
-```
+`AND` has higher precedence than `OR`. Use parentheses to override:
 
-#### Grouping with Parentheses
 ```elixir
-# Use parentheses to control precedence
-Predicated.test("(a == 1 OR b == 2) AND c == 3", %{a: 5, b: 2, c: 3})
+# Without parentheses: AND binds tighter
+# Evaluates as: a == 1 OR (b == 2 AND c == 3)
+Predicated.test("a == 1 OR b == 2 AND c == 3", %{a: 1, b: 0, c: 0})
 #=> true
+
+# With parentheses: OR is evaluated first
+# Evaluates as: (a == 1 OR b == 2) AND c == 3
+Predicated.test("(a == 1 OR b == 2) AND c == 3", %{a: 1, b: 0, c: 3})
+#=> true
+
+Predicated.test("(a == 1 OR b == 2) AND c == 3", %{a: 1, b: 0, c: 0})
+#=> false
 ```
 
-#### Multi-level Nesting
+### Grouping with Parentheses
+
+Parentheses control evaluation order and can be nested to any depth:
+
 ```elixir
+# Simple grouping
+Predicated.test(
+  "active == true AND (role == 'admin' OR role == 'editor')",
+  %{active: true, role: "editor"}
+)
+#=> true
+
+# Multi-level nesting
 query = """
 organization_id == '123' AND (
-  role == 'admin' OR 
+  role == 'admin' OR
   (role == 'user' AND permissions contains 'write') OR
-  (department == 'IT' AND level >= 3)
+  (department == 'engineering' AND level >= 3)
 )
 """
 
 Predicated.test(query, %{
   organization_id: "123",
-  role: "user", 
+  role: "user",
   permissions: ["read", "write"],
-  department: "Sales",
-  level: 2
+  department: "sales",
+  level: 1
+})
+#=> true (matched: role == 'user' AND permissions contains 'write')
+```
+
+## Data Types
+
+### Strings
+
+Strings are enclosed in single quotes. They support special characters including `@`, `.`, `/`, `+`, `-`, and Unicode:
+
+```elixir
+Predicated.test("email == 'user@example.com'", %{email: "user@example.com"})
+#=> true
+
+Predicated.test("name == 'O\\'Brien'", %{name: "O'Brien"})
+#=> true
+
+Predicated.test("id == '550e8400-e29b-41d4-a716-446655440000'", %{
+  id: "550e8400-e29b-41d4-a716-446655440000"
 })
 #=> true
 ```
 
-## Error Handling
+### Numbers
 
-Query parsing errors return error tuples:
+Integers, floats, negative numbers, and scientific notation:
 
 ```elixir
-case Predicated.Query.new("invalid == ") do
-  {:ok, predicates} -> 
-    # Use predicates
+# Integers
+Predicated.test("count == 42", %{count: 42})
+#=> true
+
+# Floats
+Predicated.test("price < 19.99", %{price: 15.50})
+#=> true
+
+# Negative numbers
+Predicated.test("temperature > -10", %{temperature: 5})
+#=> true
+
+# Scientific notation
+Predicated.test("distance > 1.5e6", %{distance: 2_000_000})
+#=> true
+```
+
+### Booleans
+
+`true` and `false` (case-insensitive):
+
+```elixir
+Predicated.test("verified == true", %{verified: true})
+#=> true
+
+Predicated.test("deleted == FALSE", %{deleted: false})
+#=> true
+
+Predicated.test("active == TRUE AND admin == false", %{active: true, admin: false})
+#=> true
+```
+
+### Nil / Null
+
+Check for nil values using `nil`, `NIL`, `null`, or `NULL`:
+
+```elixir
+Predicated.test("deleted_at == nil", %{deleted_at: nil})
+#=> true
+
+Predicated.test("email != null", %{email: "user@example.com"})
+#=> true
+
+# Missing fields are treated as nil
+Predicated.test("nickname == nil", %{name: "Alice"})
+#=> true
+```
+
+### Dates
+
+Date values use the `::DATE` type cast with ISO 8601 format:
+
+```elixir
+Predicated.test("birthday >= '2000-01-01'::DATE", %{birthday: ~D[2000-06-15]})
+#=> true
+
+Predicated.test("expiry < '2025-12-31'::DATE", %{expiry: ~D[2025-06-01]})
+#=> true
+
+# Date range check
+Predicated.test(
+  "start_date >= '2024-01-01'::DATE AND start_date <= '2024-12-31'::DATE",
+  %{start_date: ~D[2024-07-04]}
+)
+#=> true
+```
+
+### DateTimes
+
+DateTime values use the `::DATETIME` type cast with ISO 8601 format:
+
+```elixir
+Predicated.test(
+  "created_at >= '2024-01-01T00:00:00Z'::DATETIME",
+  %{created_at: ~U[2024-06-15 10:30:00Z]}
+)
+#=> true
+
+# NaiveDateTime values are automatically converted to UTC for comparison
+Predicated.test(
+  "updated_at > '2024-01-01T00:00:00Z'::DATETIME",
+  %{updated_at: ~N[2024-06-15 10:30:00]}
+)
+#=> true
+```
+
+### Lists
+
+Lists use bracket notation and work with the `in`, `contains`, and `not contains` operators:
+
+```elixir
+# Check if a value is in a predefined list
+Predicated.test("status in ['active', 'pending', 'review']", %{status: "pending"})
+#=> true
+
+# Check if a list field contains a value
+Predicated.test("tags contains 'elixir'", %{tags: ["elixir", "phoenix", "otp"]})
+#=> true
+
+# Negated contains
+Predicated.test("roles not contains 'banned'", %{roles: ["user", "contributor"]})
+#=> true
+
+# Numeric lists
+Predicated.test("score in [85, 90, 95, 100]", %{score: 90})
+#=> true
+
+# Mixed type lists
+Predicated.test("value in [1, 'two', 3]", %{value: "two"})
+#=> true
+```
+
+## Real-World Examples
+
+### User Authorization
+
+```elixir
+# Check if a user has access to a resource
+access_rule = """
+organization_id == 'org_123' AND (
+  role == 'admin' OR
+  role == 'owner' OR
+  (role == 'member' AND permissions contains 'read')
+)
+"""
+
+user = %{
+  organization_id: "org_123",
+  role: "member",
+  permissions: ["read", "comment"]
+}
+
+Predicated.test(access_rule, user)
+#=> true
+```
+
+### E-Commerce Product Filtering
+
+```elixir
+filter = "category == 'electronics' AND price <= 500 AND in_stock == true AND rating >= 4.0"
+
+products = [
+  %{name: "Laptop", category: "electronics", price: 450, in_stock: true, rating: 4.5},
+  %{name: "Phone", category: "electronics", price: 800, in_stock: true, rating: 4.8},
+  %{name: "Mouse", category: "electronics", price: 25, in_stock: false, rating: 4.2},
+  %{name: "Tablet", category: "electronics", price: 350, in_stock: true, rating: 3.9}
+]
+
+Enum.filter(products, &Predicated.test(filter, &1))
+#=> [%{name: "Laptop", ...}]
+```
+
+### Event Log Filtering
+
+```elixir
+query = "level == 'error' AND source == 'payments' AND timestamp >= '2024-06-01T00:00:00Z'::DATETIME"
+
+events = [
+  %{level: "error", source: "payments", message: "timeout", timestamp: ~U[2024-06-15 10:00:00Z]},
+  %{level: "info", source: "payments", message: "success", timestamp: ~U[2024-06-15 10:01:00Z]},
+  %{level: "error", source: "auth", message: "failed", timestamp: ~U[2024-06-15 10:02:00Z]}
+]
+
+Enum.filter(events, &Predicated.test(query, &1))
+#=> [%{level: "error", source: "payments", message: "timeout", ...}]
+```
+
+### Feature Flags
+
+```elixir
+# Define feature flag rules
+flag_rule = "plan in ['pro', 'enterprise'] OR (plan == 'free' AND beta_tester == true)"
+
+# Check if a user qualifies
+Predicated.test(flag_rule, %{plan: "free", beta_tester: true})
+#=> true
+
+Predicated.test(flag_rule, %{plan: "free", beta_tester: false})
+#=> false
+
+Predicated.test(flag_rule, %{plan: "pro", beta_tester: false})
+#=> true
+```
+
+### Form Validation Rules
+
+```elixir
+rules = [
+  {"age >= 18", "Must be 18 or older"},
+  {"email != nil", "Email is required"},
+  {"password_length >= 8", "Password must be at least 8 characters"}
+]
+
+form_data = %{age: 16, email: "test@example.com", password_length: 6}
+
+errors =
+  rules
+  |> Enum.reject(fn {rule, _msg} -> Predicated.test(rule, form_data) end)
+  |> Enum.map(fn {_rule, msg} -> msg end)
+#=> ["Must be 18 or older", "Password must be at least 8 characters"]
+```
+
+## Working with Predicate Structs
+
+For programmatic construction, you can build predicates using structs directly:
+
+```elixir
+alias Predicated.Predicate
+alias Predicated.Condition
+
+predicates = [
+  %Predicate{
+    condition: %Condition{
+      identifier: "status",
+      comparison_operator: "==",
+      expression: "active"
+    },
+    logical_operator: :and
+  },
+  %Predicate{
+    condition: %Condition{
+      identifier: "age",
+      comparison_operator: ">=",
+      expression: 21
+    }
+  }
+]
+
+Predicated.test(predicates, %{status: "active", age: 25})
+#=> true
+```
+
+### Grouped Predicates with Structs
+
+Nested logic is represented by putting predicates inside the `predicates` field:
+
+```elixir
+predicates = [
+  %Predicate{
+    condition: %Condition{
+      identifier: "org_id",
+      comparison_operator: "==",
+      expression: "123"
+    },
+    logical_operator: :and
+  },
+  %Predicate{
+    predicates: [
+      %Predicate{
+        condition: %Condition{
+          identifier: "role",
+          comparison_operator: "==",
+          expression: "admin"
+        },
+        logical_operator: :or
+      },
+      %Predicate{
+        condition: %Condition{
+          identifier: "role",
+          comparison_operator: "==",
+          expression: "editor"
+        }
+      }
+    ]
+  }
+]
+
+# Equivalent to: org_id == '123' AND (role == 'admin' OR role == 'editor')
+Predicated.test(predicates, %{org_id: "123", role: "editor"})
+#=> true
+```
+
+### Plain Maps
+
+Structs are not required. Plain maps with the same shape work too:
+
+```elixir
+predicates = [
+  %{
+    condition: %{
+      identifier: "name",
+      comparison_operator: "==",
+      expression: "Alice"
+    },
+    logical_operator: :and,
+    predicates: []
+  },
+  %{
+    condition: %{
+      identifier: "active",
+      comparison_operator: "==",
+      expression: true
+    },
+    predicates: []
+  }
+]
+
+Predicated.test(predicates, %{name: "Alice", active: true})
+#=> true
+```
+
+## Parsing Query Strings
+
+Use `Predicated.Query.new/1` to parse a query string into predicate structs:
+
+```elixir
+{:ok, predicates} = Predicated.Query.new("status == 'active' AND age > 21")
+
+# Inspect the parsed result
+predicates
+#=> [
+#   %Predicated.Predicate{
+#     condition: %Predicated.Condition{
+#       identifier: "status",
+#       comparison_operator: "==",
+#       expression: "active"
+#     },
+#     logical_operator: :and,
+#     predicates: []
+#   },
+#   %Predicated.Predicate{
+#     condition: %Predicated.Condition{
+#       identifier: "age",
+#       comparison_operator: ">",
+#       expression: 21
+#     },
+#     logical_operator: nil,
+#     predicates: []
+#   }
+# ]
+```
+
+### Converting Back to Query Strings
+
+```elixir
+{:ok, predicates} = Predicated.Query.new("name == 'John' AND age > 21")
+
+Predicated.to_query(predicates)
+#=> "name == 'John' AND age > 21"
+```
+
+This is useful for logging, debugging, or serializing predicates for storage.
+
+## Error Handling
+
+### Parse Errors
+
+`Predicated.Query.new/1` returns error tuples for invalid queries:
+
+```elixir
+case Predicated.Query.new("invalid query ==") do
+  {:ok, predicates} ->
+    Predicated.test(predicates, data)
+
   {:error, reason} ->
-    # Handle error
-    IO.puts("Parse error: #{inspect(reason)}")
+    Logger.warning("Invalid query: #{inspect(reason)}")
+    false
 end
 ```
 
-Common error types:
-- `{:error, unparsed: "remaining text"}` - Query has unparsed remainder
-- `{:error, "expected..."}` - Syntax error with expectation
+### Graceful Degradation
 
-## Performance Considerations
+When `Predicated.test/2` receives an unparseable query string, it logs the error and returns `false` instead of raising:
+
+```elixir
+# Bad query - logs error, returns false
+Predicated.test("not a valid query !!!", %{foo: "bar"})
+#=> false (logs: "Could not parse the query: ...")
+```
+
+### Missing Fields
+
+Missing fields are treated as `nil`. Comparisons with nil return `false` for ordering operators:
+
+```elixir
+# Field doesn't exist - treated as nil
+Predicated.test("missing_field == nil", %{other: "value"})
+#=> true
+
+Predicated.test("missing_field > 10", %{other: "value"})
+#=> false
+```
+
+## Ecto Integration
+
+Predicates can be translated to Ecto dynamic queries. While there isn't built-in automatic support yet, you can recursively walk the predicate structs to build `dynamic/1` expressions.
+
+Here's a pattern used in production (from [EventRelay](https://github.com/eventrelay/eventrelay)):
+
+```elixir
+import Ecto.Query
+
+def apply_predicates([predicate | predicates], nil, nil) do
+  conditions = apply_predicate(predicate, dynamic(true), nil)
+  apply_predicates(predicates, conditions, predicate)
+end
+
+def apply_predicates([predicate | predicates], conditions, previous_predicate) do
+  conditions = apply_predicate(predicate, conditions, previous_predicate)
+  apply_predicates(predicates, conditions, predicate)
+end
+
+def apply_predicates([], conditions, _previous_predicate), do: conditions
+
+def apply_predicate(
+      %{condition: %{identifier: field, comparison_operator: "==", expression: value}},
+      conditions,
+      previous_predicate
+    ) do
+  field = String.to_atom(field)
+
+  case previous_predicate do
+    nil ->
+      dynamic([r], ^conditions and field(r, ^field) == ^value)
+
+    %{logical_operator: :and} ->
+      dynamic([r], ^conditions and field(r, ^field) == ^value)
+
+    %{logical_operator: :or} ->
+      dynamic([r], ^conditions or field(r, ^field) == ^value)
+  end
+end
+```
+
+Then use it in your queries:
+
+```elixir
+{:ok, predicates} = Predicated.Query.new("status == 'active' AND role == 'admin'")
+conditions = apply_predicates(predicates, nil, nil)
+
+from(u in User, where: ^conditions)
+|> Repo.all()
+```
+
+## Performance
 
 - Predicates are evaluated in-memory, suitable for filtering small to medium datasets
-- For large datasets, consider using the Ecto integration to push filtering to the database
-- Query string parsing has a one-time cost; reuse parsed predicates when possible
+- For large datasets, push filtering to the database using the Ecto integration pattern above
+- Query string parsing has a one-time cost; parse once and reuse predicates when evaluating against multiple subjects:
+
+```elixir
+# Parse once
+{:ok, predicates} = Predicated.Query.new("status == 'active' AND score > 80")
+
+# Reuse against many subjects
+results = Enum.filter(large_list, &Predicated.test(predicates, &1))
+```
+
+## Security
+
+- **Atom exhaustion prevention**: Identifiers are converted using `String.to_existing_atom/1` to prevent denial-of-service via unbounded atom creation from user input
+- **Input validation**: Type casts and field names are validated during parsing
+- **Safe type handling**: Type mismatches and nil values are handled gracefully without raising exceptions
 
 ## TODO
 
-- [x] Implement grouped/nested predicates in the query parser
-- [x] Update docs to include example of using it with Ecto
-- [x] Better handle non-terminal conditions when predicates are malformed
-- [ ] More tests
-- [ ] Write some macros that make integrating with Ecto nicer and drier
-- [ ] Add debugger that displays all the conditions and their results
-- [ ] Support for additional operators (like, starts_with, ends_with, regex)
-- [ ] Support for nil/null checks
-- [ ] Support for custom operators
+- [x] Grouped/nested predicates in the query parser
+- [x] Ecto integration example
+- [x] Better handling of malformed predicates
+- [ ] Macros for cleaner Ecto integration
+- [ ] Debugger for condition visualization
+- [ ] Additional operators (`like`, `starts_with`, `ends_with`, `regex`)
+- [ ] `NOT` operator for negating groups
+- [ ] Custom operator support
 
 ## Contributing
 
@@ -497,5 +649,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/predicated>.
-
+be found at [https://hexdocs.pm/predicated](https://hexdocs.pm/predicated).
