@@ -10,8 +10,17 @@ defmodule Predicated.MixProject do
       version: @version,
       elixir: "~> 1.13",
       package: package(),
+      aliases: aliases(),
       deps: deps(),
       docs: docs()
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        check: :test
+      ]
     ]
   end
 
@@ -27,7 +36,9 @@ defmodule Predicated.MixProject do
     [
       {:nimble_parsec, "~> 1.2"},
       {:flamel, "~> 1.4"},
-      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:doctor, "~> 0.22.0", only: [:dev, :test]},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -41,6 +52,18 @@ defmodule Predicated.MixProject do
       links: %{
         GitHub: @source_url
       }
+    ]
+  end
+
+  defp aliases do
+    [
+      check: [
+        "format --check-formatted",
+        "compile --warnings-as-errors",
+        "credo list --format=oneline",
+        "doctor",
+        "test"
+      ]
     ]
   end
 
